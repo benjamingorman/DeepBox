@@ -1,0 +1,4 @@
+#ifndef PLAYER_CLIENTSIDE_H
+#define PLAYER_CLIENTSIDE_H
+
+#endif
