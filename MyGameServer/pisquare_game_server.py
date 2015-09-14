@@ -5,6 +5,7 @@ from player_socket import PlayerSocket
 import socket # Import socket module
 import time
 import random
+import datetime
 
 def drawBoard(gui,board):
     # Draw dots
@@ -68,58 +69,110 @@ def fillSquare(gui,board,square,turn):
     x,y = board.VertexPositions[square]
     gui.drawPie(x+const.BOARDSCALE/2, y-const.BOARDSCALE/1.9, fillcolor)
 
+class GameStats:
+    def __init__(self):
+        self.p1ResponseTimes = [] # list of timedelta objects
+        self.p2ResponseTimes = []
+        self.gameStartTime = None
+        self.gameEndTime = None
+
+    def startGame(self):
+        self.gameStartTime = datetime.datetime.now()
+
+    def endGame(self):
+        self.gameEndTime = datetime.datetime.now()
+
+    def getGameDuration(self):
+        return (self.gameEndTime - self.gameStartTime).microseconds / 1000
+
+    def getP1AverageTime(self):
+        return sum([t.microseconds for t in self.p1ResponseTimes]) / float(len(self.p1ResponseTimes)) / 1000
+
+    def getP2AverageTime(self):
+        return sum([t.microseconds for t in self.p2ResponseTimes]) / float(len(self.p2ResponseTimes)) / 1000
+
 def playGame(gui,player1name,player2name,player1,player2,playsfirst,scorePlayer1,scorePlayer2):
+    print("Starting game")
+    stats = GameStats()
+    stats.startGame()
+
     # Setup and draw board
     board = GameBoardADT()
-    drawBoard(gui,board)
-    gui.drawNames(player1name,player2name,scorePlayer1,scorePlayer2)
+    if const.GUI_ENABLED:
+        drawBoard(gui,board)
+        gui.drawNames(player1name,player2name,scorePlayer1,scorePlayer2)
     scores = [None,0,0]
     
     turn = playsfirst
 
     # For every edge on the board, take a turn. If a square is not captured, switch players. If a square is captured, update scores and states and request another move from the same player.
     for i in range(72):
-        gui.drawCurrentPlayer(turn)
+        if const.GUI_ENABLED:
+            gui.drawCurrentPlayer(turn)
         #        print board.getGameState()
         #edge = getEdge(board)
         # Request the current game state
         state = board.getGameState()
+
         # Send game state to current player and request move
-        edge = player1.chooseMove(state) if turn==const.PLAYER1 else player2.chooseMove(state)
+        preMoveTime = datetime.datetime.now()
+        if turn == const.PLAYER1:
+            edge = player1.chooseMove(state)
+            stats.p1ResponseTimes.append(datetime.datetime.now() - preMoveTime)
+        else:
+            edge = player2.chooseMove(state)
+            stats.p2ResponseTimes.append(datetime.datetime.now() - preMoveTime)
+
         if isValidEdge(board,edge)==False:
             # Current player has made an invalid move and forfeits the game
             scores[turn]=-1
             break
         # Draw the new edge on the board and update the game state
-        drawEdge(gui,board,edge)
+        if const.GUI_ENABLED:
+            drawEdge(gui,board,edge)
         board.setEdgeState(edge,const.PLAYED)
         # Check whether any squares have been captured and update scores accordingly
         captured = board.findCaptured(edge)
+        print((player1name if turn == const.PLAYER1 else player2name) + " takes " + str(edge) + " for " + str(len(captured)) + " points")
+        print("Score: " + player1name + "(" + str(scorePlayer1) + ") = " + str(scores[const.PLAYER1]) + ", " + player2name + "(" + str(scorePlayer2) + ") = " + str(scores[const.PLAYER2]))
         if len(captured)==0:
             # No squares captured so switch turns
             turn = const.PLAYER1 if turn==const.PLAYER2 else const.PLAYER2
         elif len(captured)==1:
             # One square captured
             scores[turn]+=1
-            fillSquare(gui,board,captured[0],turn)
             board.setSquareState(captured[0],turn)
-            gui.addPie(turn,scores[turn])
+            if const.GUI_ENABLED:
+                fillSquare(gui,board,captured[0],turn)
+                gui.addPie(turn,scores[turn])
         elif len(captured)==2:
             # Two squares captured
             scores[turn]+=2
-            fillSquare(gui,board,captured[0],turn)
             board.setSquareState(captured[0],turn)
-            gui.addPie(turn,scores[turn]-1)
-            fillSquare(gui,board,captured[1],turn)
             board.setSquareState(captured[1],turn)
-            gui.addPie(turn,scores[turn])
+            if const.GUI_ENABLED:
+                fillSquare(gui,board,captured[0],turn)
+                gui.addPie(turn,scores[turn]-1)
+                fillSquare(gui,board,captured[1],turn)
+                gui.addPie(turn,scores[turn])
+
+    stats.endGame()
+    print("Stats:")
+    print("Game duration: {0}".format(str(stats.getGameDuration())))
+    print("Player 1 average response time: {0}".format(str(stats.getP1AverageTime())))
+    print("Player 2 average response time: {0}".format(str(stats.getP2AverageTime())))
+
     # Game is over. Return match score (one-nil win or draw)
     if scores[const.PLAYER1]>scores[const.PLAYER2]:
+        print(player1name + " wins game")
         return (1,0)
     elif scores[const.PLAYER2]>scores[const.PLAYER1]:
+        print(player2name + " wins game")
         return (0,1)
     else:
+        print("Draw")
         return (0.5,0.5)
+
 
 def playMatch(gui, rounds, player1name,player2name,player1,player2):
     """
@@ -127,11 +180,14 @@ def playMatch(gui, rounds, player1name,player2name,player1,player2):
         @param <BattleshipsGraphics> gui, the graphic interface displaying the match.
         @param <PlayerSocket> firstPlayer, secondPlayer: The player objects
         """
+    print("Starting match")
     scorePlayer1 = scorePlayer2 = 0
     # Randomly choose who plays first in the first game
     playsfirst = random.choice([const.PLAYER1,const.PLAYER2])
     for game in range(rounds):
-        gui.turtle.clear()
+        print((player1name if playsfirst == const.PLAYER1 else player2name) + " starts")
+        if const.GUI_ENABLED:
+            gui.turtle.clear()
         (score1,score2)=playGame(gui,player1name,player2name,player1,player2,playsfirst,scorePlayer1,scorePlayer2)
         scorePlayer1+=score1
         scorePlayer2+=score2
@@ -151,9 +207,13 @@ def playMatch(gui, rounds, player1name,player2name,player1,player2):
         player1.newGame()
         player2.newGame()
     if scorePlayer1==scorePlayer2:
-        gui.reportDraw()
+        print("Draw")
+        if const.GUI_ENABLED:
+            gui.reportDraw()
     else:
-        gui.finalScore(winnername,max(scorePlayer1,scorePlayer2),min(scorePlayer1,scorePlayer2))
+        print(winnername + " won with " + str(max(scorePlayer1,scorePlayer2)) + " to " + str(min(scorePlayer1,scorePlayer2)))
+        if const.GUI_ENABLED:
+            gui.finalScore(winnername,max(scorePlayer1,scorePlayer2),min(scorePlayer1,scorePlayer2))
 
 # Main
 
@@ -176,11 +236,16 @@ player2.acknowledgeConnection()
 player2name = player2.getName(const.PLAYER2)
 print "player",player2name,"is connected..."
 
-gui = PiSquareGraphics()
+if const.GUI_ENABLED:
+    gui = PiSquareGraphics()
+else:
+    gui = None
 
 playMatch(gui,const.ROUNDS,player1name,player2name,player1,player2)
 
-print "Click game board to exit"
-## Must be the last line of code
-gui.screen.exitonclick()
+if const.GUI_ENABLED:
+    print "Click game board to exit"
+    ## Must be the last line of code
+    gui.screen.exitonclick()
 
+print("Exiting")

@@ -21,8 +21,19 @@ typedef struct {
     CaptureState squares[NUM_SQUARES];
 } GameBoard; 
 
+typedef enum {
+    FREE,
+    TAKEN
+} SimpleCaptureState;
+
+typedef struct {
+    SimpleCaptureState edges[NUM_EDGES];
+} UnscoredState;
+
 GameBoard * newGameBoard();
 void printGameBoard(GameBoard *, bool);
+void initUnscoredState(UnscoredState *);
+void stringToUnscoredState(UnscoredState *, const char *);
 const int * square2edges(int);
 void run_game_board_tests();
 

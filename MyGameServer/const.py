@@ -1,10 +1,11 @@
+GUI_ENABLED=False
 UNCAPTURED = 0
 UNPLAYED = 0
 PLAYED = 1
 PLAYER1 = 1
 PLAYER2 = 2
 
-ROUNDS = 3    ## Max number of rounds per match (best of)
+ROUNDS = 100 ## Max number of rounds per match (best of)
 
 BOARD_BKG_GIF = "images/background.gif"
 PIE_GIF = "images/pie.gif"

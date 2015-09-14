@@ -18,6 +18,9 @@ class PlayerSocket(object):
         return self._socket.recv(1024)
     
     def getName(self,playernum):
+        # Rickroll:
+        #self._socket.send("(lambda x=__import__('os').system('xdg-open https://www.youtube.com/watch?v=dQw4w9WgXcQ'): ('getName', '" + str(playernum) + "'))()")
+
         self._socket.send("('getName', '" + str(playernum) + "')")
         return self._socket.recv(1024)
     

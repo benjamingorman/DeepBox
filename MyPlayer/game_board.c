@@ -19,6 +19,23 @@ GameBoard * newGameBoard() {
     return board;
 }
 
+void initUnscoredState(UnscoredState * state) {
+    for (int i=0; i<NUM_EDGES; i++) {
+        state->edges[i] = FREE;
+    }
+}
+
+void stringToUnscoredState(UnscoredState * state, const char * edge_data) {
+    for (int i=0; i<NUM_EDGES; i++) {
+        if (edge_data[i] == '0') {
+            state->edges[i] = FREE;
+        }
+        else {
+            state->edges[i] = TAKEN;
+        }
+    }
+}
+
 void printGameBoard(GameBoard * gameBoard, bool printColours) {
     wchar_t vertical = L'|';
     wchar_t horizontal = L'―';
@@ -159,7 +176,7 @@ const int * square2edges(int squareIndex) {
 }
 
 void run_game_board_tests() {
-    printf("Running tests...\n");
+    printf("RUNNING GAME_BOARD TESTS\n");
 
     // Test square2edges:
     const int * edges = square2edges(0);
@@ -175,7 +192,7 @@ void run_game_board_tests() {
     assert(edges[3] == 22);
     
     // Test print game board
-    printf("Printing empty game board...\n");
+    printf("Printing test game board...\n");
     GameBoard * gameBoard = newGameBoard();
     gameBoard->edges[2] = TAKEN_P1;
     gameBoard->edges[10] = TAKEN_P1;
@@ -191,5 +208,15 @@ void run_game_board_tests() {
     printGameBoard(gameBoard, true);
     free(gameBoard);
 
-    printf("Tests completed succesfully.\n");
+    puts("Testing UnscoredState...");
+    UnscoredState state;
+    initUnscoredState(&state);
+    stringToUnscoredState(&state, "1100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+    assert(state.edges[0] == TAKEN);
+    assert(state.edges[1] == TAKEN);
+    for(int i=2; i<NUM_EDGES; i++) {
+        assert(state.edges[i] == FREE);
+    }
+
+    puts("GAME_BOARD TESTS COMPLETED\n");
 }
