@@ -16,12 +16,13 @@
 #include <regex.h>
 #include "game_board.h"
 #include "player_clientside.h"
+#include "player_strategy.h"
 
 #define ACKNOWLEDGED "ACK"
 #define BUFSIZE 1025
 #define PLAYER_NAME "DeepBox"
 
-bool parse_server_msg(
+bool parseServerMsg(
         const char * server_msg,
         char * cmd_buf,
         char * data_buf) {
@@ -34,7 +35,7 @@ bool parse_server_msg(
     // Compile regex
     int reti = regcomp(&regex, msg_regex_pattern, REG_EXTENDED);
     if (reti) {
-        fprintf(stderr, "[ERROR] parse_server_msg: Could not compile regex.");
+        fprintf(stderr, "[ERROR] parseServerMsg: Could not compile regex.");
         exit(1);
     }
 
@@ -63,7 +64,7 @@ bool parse_server_msg(
         return true;
     }
     else if (reti == REG_NOMATCH) {
-        fprintf(stderr, "[ERROR] parse_server_msg: No match!\n");
+        fprintf(stderr, "[ERROR] parseServerMsg: No match!\n");
         return false;
     }
     else {
@@ -74,7 +75,7 @@ bool parse_server_msg(
     }
 }
 
-void run_player_clientside_tests() {
+void runPlayerClientsideTests() {
     puts("RUNNING PLAYER_CLIENTSIDE TESTS");
     char msg_buf[BUFSIZE];
     char cmd_buf[200];
@@ -82,14 +83,14 @@ void run_player_clientside_tests() {
 
     sprintf(msg_buf, "('newGame', None)");
     printf("Testing parsing of: %s\n", msg_buf);
-    bool success = parse_server_msg(msg_buf, cmd_buf, data_buf);
+    bool success = parseServerMsg(msg_buf, cmd_buf, data_buf);
     assert(success == true);
     assert(strcmp(cmd_buf, "newGame") == 0);
     assert(strcmp(data_buf, "None") == 0);
 
     sprintf(msg_buf, "('getName', '1')");
     printf("Testing parsing of: %s\n", msg_buf);
-    success = parse_server_msg(msg_buf, cmd_buf, data_buf);
+    success = parseServerMsg(msg_buf, cmd_buf, data_buf);
     assert(success == true);
     assert(strcmp(cmd_buf, "getName") == 0);
     assert(strcmp(data_buf, "1") == 0);
@@ -101,9 +102,10 @@ int main(int argc, char ** argv) {
     char * server_address = "localhost";
     char * server_port = "12345";
     bool run_tests = false;
+    Strategy strategy = RANDOM_MOVE;
 
     int option;
-    while((option = getopt(argc, argv, "a:p:t")) != -1) {
+    while((option = getopt(argc, argv, "a:p:ts:")) != -1) {
         switch(option) {
             case 'a':
                 server_address = optarg;
@@ -114,6 +116,15 @@ int main(int argc, char ** argv) {
             case 't':
                 run_tests = true;
                 break;
+            case 's':
+                if(strcmp("random_move", optarg) == 0)
+                    strategy = RANDOM_MOVE;
+                    puts("Using strategy RANDOM_MOVE");
+                else if(strcmp("first_box_completing_move", optarg) == 0)
+                    puts("Using strategy FIRST_BOX_COMPLETING_MOVE");
+                    strategy = FIRST_BOX_COMPLETING_MOVE;
+
+                break;
         }
     }
 
@@ -121,9 +132,9 @@ int main(int argc, char ** argv) {
     printf("Server port: %s\n", server_port);
 
     if (run_tests) {
-        printf("About to run game board tests...\n");
-        run_game_board_tests();
-        run_player_clientside_tests();
+        runGameBoardTests();
+        runPlayerClientsideTests();
+        runPlayerStrategyTests();
         exit(0);
     }
 
@@ -191,7 +202,7 @@ int main(int argc, char ** argv) {
             printf("Recognized message 'connected'. Sending ack.\n");
             sprintf(send_buf, ACKNOWLEDGED);
         }
-        else if (parse_server_msg(recv_buf, cmd_buf, data_buf)) {
+        else if (parseServerMsg(recv_buf, cmd_buf, data_buf)) {
             printf("Server command: %s\n Server data: %s\n", cmd_buf, data_buf);
             if (strcmp(cmd_buf, "getName") == 0) {
                 printf("Recognized message 'getName'. My name is %s\n", PLAYER_NAME);
@@ -206,7 +217,7 @@ int main(int argc, char ** argv) {
                 printf("Recognized message 'chooseMove'.\n");
                 UnscoredState state;
                 stringToUnscoredState(&state, data_buf);
-                int move = chooseMove(state);
+                Edge move = chooseMove(state, strategy);
                 sprintf(send_buf, "%d", move);
             }
             else if (strcmp(cmd_buf, "gameOver") == 0) {

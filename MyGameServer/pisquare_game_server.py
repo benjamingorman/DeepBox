@@ -86,10 +86,13 @@ class GameStats:
         return (self.gameEndTime - self.gameStartTime).microseconds / 1000
 
     def getP1AverageTime(self):
-        return sum([t.microseconds for t in self.p1ResponseTimes]) / float(len(self.p1ResponseTimes)) / 1000
+        return sum([t.seconds * 1000000 + t.microseconds for t in self.p1ResponseTimes]) / float(len(self.p1ResponseTimes))
 
     def getP2AverageTime(self):
-        return sum([t.microseconds for t in self.p2ResponseTimes]) / float(len(self.p2ResponseTimes)) / 1000
+        return sum([t.seconds * 1000000 + t.microseconds for t in self.p2ResponseTimes]) / float(len(self.p2ResponseTimes))
+
+def microsecondsToSecondsString(micros):
+    return str(micros / float(1000000))
 
 def playGame(gui,player1name,player2name,player1,player2,playsfirst,scorePlayer1,scorePlayer2):
     print("Starting game")
@@ -159,8 +162,8 @@ def playGame(gui,player1name,player2name,player1,player2,playsfirst,scorePlayer1
     stats.endGame()
     print("Stats:")
     print("Game duration: {0}".format(str(stats.getGameDuration())))
-    print("Player 1 average response time: {0}".format(str(stats.getP1AverageTime())))
-    print("Player 2 average response time: {0}".format(str(stats.getP2AverageTime())))
+    print("Player 1 average response time: {0}".format(microsecondsToSecondsString(stats.getP1AverageTime())))
+    print("Player 2 average response time: {0}".format(microsecondsToSecondsString(stats.getP2AverageTime())))
 
     # Game is over. Return match score (one-nil win or draw)
     if scores[const.PLAYER1]>scores[const.PLAYER2]:
@@ -191,6 +194,8 @@ def playMatch(gui, rounds, player1name,player2name,player1,player2):
         (score1,score2)=playGame(gui,player1name,player2name,player1,player2,playsfirst,scorePlayer1,scorePlayer2)
         scorePlayer1+=score1
         scorePlayer2+=score2
+
+        """
         if scorePlayer1>rounds/2.0:
             # Player 1 wins match
             player1.close("Win")
@@ -203,15 +208,36 @@ def playMatch(gui, rounds, player1name,player2name,player1,player2):
             player1.close("Lose")
             winnername = player2name
             break
+        """
+
         playsfirst = const.PLAYER1 if playsfirst==const.PLAYER2 else const.PLAYER2
         player1.newGame()
         player2.newGame()
+
+
+    print("{0}: {1}".format(player1name, str(scorePlayer1)))
+    print("{0}: {1}".format(player2name, str(scorePlayer2)))
+
+    draw = False
+    winnername = ""
     if scorePlayer1==scorePlayer2:
         print("Draw")
+        draw = True
+        player1.close("Draw")
+        player2.close("Draw")
         if const.GUI_ENABLED:
             gui.reportDraw()
+    elif scorePlayer1 > scorePlayer2:
+        winnername = player1name
+        player1.close("Win")
+        player2.close("Lose")
     else:
-        print(winnername + " won with " + str(max(scorePlayer1,scorePlayer2)) + " to " + str(min(scorePlayer1,scorePlayer2)))
+        winnername = player2name
+        player1.close("Lose")
+        player2.close("Win")
+
+    if not draw:
+        print("Winner: " + winnername)
         if const.GUI_ENABLED:
             gui.finalScore(winnername,max(scorePlayer1,scorePlayer2),min(scorePlayer1,scorePlayer2))
 

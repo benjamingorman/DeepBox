@@ -7,34 +7,38 @@
 #define P2_COLOUR "\x1b[34m"
 #define COLOUR_RESET "\x1b[0m"
 
-#define NUM_SQUARES 28
+#define NUM_BOXES 28
 #define NUM_EDGES 72
 
-typedef enum {
-    AVAILABLE,
-    TAKEN_P1,
-    TAKEN_P2
-} CaptureState;
-
-typedef struct {
-    CaptureState edges[NUM_EDGES];
-    CaptureState squares[NUM_SQUARES];
-} GameBoard; 
+typedef short Edge;
+typedef short Box;
 
 typedef enum {
     FREE,
     TAKEN
-} SimpleCaptureState;
+} CaptureState;
 
 typedef struct {
-    SimpleCaptureState edges[NUM_EDGES];
+    CaptureState edges[NUM_EDGES];
 } UnscoredState;
 
-GameBoard * newGameBoard();
-void printGameBoard(GameBoard *, bool);
+typedef struct {
+    CaptureState edges[NUM_EDGES];
+    short score_p1;
+    short score_p2;
+} ScoredState;
+
+typedef struct {
+    Edge moves[NUM_EDGES];
+} Game;
+
 void initUnscoredState(UnscoredState *);
 void stringToUnscoredState(UnscoredState *, const char *);
-const int * square2edges(int);
-void run_game_board_tests();
+const Edge * getBoxEdges(Box);
+const Box * getEdgeBoxes(Edge);
+bool isEdgeTaken(UnscoredState *, Edge);
+bool isBoxTaken(UnscoredState *, Box);
+void printUnscoredState(UnscoredState *);
+void runGameBoardTests();
 
 #endif

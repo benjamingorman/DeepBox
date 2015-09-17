@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-bool parse_server_msg(const char *, char *, char *);
-void run_player_clientside_tests();
+bool parseServerMsg(const char *, char *, char *);
+void runPlayerClientsideTests();
 
 #endif
