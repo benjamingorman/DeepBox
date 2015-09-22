@@ -33,13 +33,13 @@ bool parseServerMsg(
     const char * msg_regex_pattern = "\\('(\\w+)', '?(\\w+)'?\\)";
     regex_t regex;
 
-    //printf("msg_regex_pattern: %s\n", msg_regex_pattern);
-    //printf("server_msg: %s\n", server_msg);
+    log_debug("msg_regex_pattern: %s\n", msg_regex_pattern);
+    log_debug("server_msg: %s\n", server_msg);
     
     // Compile regex
     int reti = regcomp(&regex, msg_regex_pattern, REG_EXTENDED);
     if (reti) {
-        fprintf(stderr, "[ERROR] parseServerMsg: Could not compile regex.");
+        log_warn("parseServerMsg: Could not compile regex.");
         exit(1);
     }
 
@@ -53,7 +53,6 @@ bool parseServerMsg(
         int cmd_len = cmd_eo - cmd_so;
         strncpy(cmd_buf, server_msg + cmd_so, cmd_len);
         cmd_buf[cmd_len] = '\0';
-        //printf("cmd: %s\n", cmd_buf);
 
         // Group 2 (data)
         int data_so = (int)matches[2].rm_so;
@@ -61,41 +60,40 @@ bool parseServerMsg(
         int data_len = data_eo - data_so;
         strncpy(data_buf, server_msg + data_so, data_len);
         data_buf[data_len] = '\0';
-        //printf("data: %s\n", data_buf);
         return true;
     }
     else if (reti == REG_NOMATCH) {
-        fprintf(stderr, "[ERROR] parseServerMsg: No match!\n");
+        log_warn("parseServerMsg: No match!\n");
         return false;
     }
     else {
         char err_buf[200];
         regerror(reti, &regex, err_buf, sizeof(err_buf));
-        fprintf(stderr, "Regex match failed: %s\n", err_buf);
+        log_warn("Regex match failed: %s\n", err_buf);
         exit(1);
     }
 }
 
 void runPlayerClientsideTests() {
-    puts("RUNNING PLAYER_CLIENTSIDE TESTS");
+    log_log("RUNNING PLAYER_CLIENTSIDE TESTS\n");
     char msg_buf[BUFSIZE];
     char cmd_buf[200];
     char data_buf[1025];
 
     sprintf(msg_buf, "('newGame', None)");
-    printf("Testing parsing of: %s\n", msg_buf);
+    log_log("Testing parsing of: %s\n", msg_buf);
     bool success = parseServerMsg(msg_buf, cmd_buf, data_buf);
     assert(success == true);
     assert(strcmp(cmd_buf, "newGame") == 0);
     assert(strcmp(data_buf, "None") == 0);
 
     sprintf(msg_buf, "('getName', '1')");
-    printf("Testing parsing of: %s\n", msg_buf);
+    log_log("Testing parsing of: %s\n", msg_buf);
     success = parseServerMsg(msg_buf, cmd_buf, data_buf);
     assert(success == true);
     assert(strcmp(cmd_buf, "getName") == 0);
     assert(strcmp(data_buf, "1") == 0);
-    puts("PLAYER_CLIENTSIDE TESTS COMPLETED\n");
+    log_log("PLAYER_CLIENTSIDE TESTS COMPLETED\n");
 }
 
 int main(int argc, char ** argv) {
@@ -137,10 +135,10 @@ int main(int argc, char ** argv) {
         }
     }
 
-    printf("Server address: %s\n", server_address);
-    printf("Server port: %s\n", server_port);
-    printf("Using strategy: %s\n", strategyName);
-    printf("Iterations: %d\n", iterations);
+    log_log("Server address: %s\n", server_address);
+    log_log("Server port: %s\n", server_port);
+    log_log("Using strategy: %s\n", strategyName);
+    log_log("Iterations: %d\n", iterations);
 
     if (run_tests) {
         runGameBoardTests();
@@ -157,17 +155,17 @@ int main(int argc, char ** argv) {
     struct sockaddr_in serv_addr;
     struct hostent *server;
 
-    printf("Creating socket...\n");
+    log_debug("Creating socket...\n");
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        fprintf(stderr, "[ERROR] opening socket.\n");
+        log_warn("[WARN] error opening socket.\n");
         exit(1);
     }
 
-    printf("Getting host...\n");
+    log_debug("Getting host...\n");
     server = gethostbyname(server_address);
     if (server == NULL) {
-        fprintf(stderr, "[ERROR], no such host: %s\n", server_address);
+        log_warn("[WARN], no such host: %s\n", server_address);
         exit(1);
     }
 
@@ -179,11 +177,13 @@ int main(int argc, char ** argv) {
           server->h_length);
     serv_addr.sin_port = htons(portno);
 
-    printf("Connecting...\n");
+    log_debug("Connecting...\n");
     if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) {
-        fprintf(stderr, "[ERROR] connecting.\n");
+        log_error("[ERROR] connecting to server.\n");
         exit(1);
     }
+
+    log_log("Connected to server successfully.\n");
 
     char recv_buf[BUFSIZE]; // For msg from server
     char send_buf[BUFSIZE]; // For msg to server
@@ -201,56 +201,56 @@ int main(int argc, char ** argv) {
     while(!game_over) {
         bzero(recv_buf, sizeof(char)*BUFSIZE);
 
-        printf("Waiting for message from server...\n");
+        log_debug("Waiting for message from server...\n");
         n = read(sockfd, recv_buf, BUFSIZE);
         if (n < 0) {
-            fprintf(stderr, "[ERROR] reading from socket.\n");
+            log_error("[ERROR] reading from socket.\n");
             exit(1);
         }
-        printf("Server says: %s\n", recv_buf);
+        log_debug("Server says: %s\n", recv_buf);
 
         // Check what the server wants us to do and respond accordingly:
         bzero(send_buf, sizeof(char)*BUFSIZE);
         if (strcmp(recv_buf, "connected") == 0) {
-            printf("Recognized message 'connected'. Sending ack.\n");
+            log_log("Recognized message 'connected'. Sending ack.\n");
             sprintf(send_buf, ACKNOWLEDGED);
         }
         else if (parseServerMsg(recv_buf, cmd_buf, data_buf)) {
-            printf("Server command: %s\nServer data: %s\n", cmd_buf, data_buf);
+            log_log("Server command: %s\nServer data: %s\n", cmd_buf, data_buf);
             if (strcmp(cmd_buf, "getName") == 0) {
-                printf("Recognized message 'getName'. My name is %s %s %d\n", PLAYER_NAME, strategyName, iterations);
+                log_log("Recognized message 'getName'. My name is %s %s %d\n", PLAYER_NAME, strategyName, iterations);
                 sprintf(send_buf, "%s %s %d", PLAYER_NAME, strategyName, iterations);
             }
             else if (strcmp(cmd_buf, "newGame") == 0) {
-                printf("Recognized message 'newGame'. Sending ack.\n");
+                log_log("Recognized message 'newGame'. Sending ack.\n");
                 sprintf(send_buf, ACKNOWLEDGED);
                 // TODO: Init newGame object
             }
             else if (strcmp(cmd_buf, "chooseMove") == 0) {
-                printf("Recognized message 'chooseMove'.\n");
+                log_log("Recognized message 'chooseMove'.\n");
                 UnscoredState state;
                 stringToUnscoredState(&state, data_buf);
                 Edge move = chooseMove(state, strategy, iterations);
                 sprintf(send_buf, "%d", move);
             }
             else if (strcmp(cmd_buf, "gameOver") == 0) {
-                printf("GAME IS OVER. Result: %s\n", data_buf);
+                log_log("GAME IS OVER. Result: %s\n", data_buf);
                 sprintf(send_buf, ACKNOWLEDGED);
                 game_over = true;
             }
             else {
-                fprintf(stderr, "[ERROR] Parsed message from server successfully bit did not recognize cmd: %s\n", cmd_buf);
+                log_error("[ERROR] Parsed message from server successfully bit did not recognize cmd: %s\n", cmd_buf);
                 exit(1);
             }
         }
         else {
-            fprintf(stderr, "[ERROR] Server sent an unrecognized command. Exiting.\n");
+            log_error("[ERROR] Server sent an unrecognized command. Exiting.\n");
             exit(1);
         }
 
         n = write(sockfd, send_buf, strlen(send_buf));
         if (n < 0) {
-            fprintf(stderr, "[ERROR] Writing to socket.\n");
+            log_error("[ERROR] Writing to socket.\n");
             exit(1);
         }
     }

@@ -36,7 +36,7 @@ void updateMCTSNode(MCTSNode *, short);
 MCTSNode * addChildToMCTSNode(MCTSNode *, Edge);
 Edge getSimpleMCTSMove(UnscoredState *, int iterations);
 short doRandomGame(UnscoredState);
-MCTSNode * selectChildUCT(MCTSNode * node);
+MCTSNode * selectChildUCT(MCTSNode * node, short numBoxesLeft);
 Edge getMCTSMove(UnscoredState *, int iterations, bool saveTree);
 void freeMCTSNode(MCTSNode *);
 void saveMCTSNodeJSON(MCTSNode * node, const char * filePath);

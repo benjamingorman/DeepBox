@@ -33,15 +33,15 @@ int randomInRange(unsigned int min, unsigned int max) {
 }
 
 void runUtilTests() {
-    puts("RUNNING UTIL TESTS\n");
+    log_log("RUNNING UTIL TESTS\n");
 
-    puts("Testing randomInRange returns 0 for interval 0, 0...");
+    log_log("Testing randomInRange returns 0 for interval 0, 0...\n");
     int r = randomInRange(0, 0);
     assert(r == 0);
 
-    puts("Testing randomInRange returns 0 or 1 for interval 0, 1...");
+    log_log("Testing randomInRange returns 0 or 1 for interval 0, 1...\n");
     r = randomInRange(0,1);
     assert(r == 0 || r == 1);
 
-    puts("UTIL TESTS COMPLETED\n");
+    log_log("UTIL TESTS COMPLETED\n");
 }

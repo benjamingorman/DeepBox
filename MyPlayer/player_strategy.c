@@ -64,29 +64,29 @@ Edge chooseMove(UnscoredState state, Strategy strategy, int iterations) {
 }
 
 void runPlayerStrategyTests() {
-    puts("RUNNING PLAYER_STRATEGY TESTS\n");
+    log_log("RUNNING PLAYER_STRATEGY TESTS\n");
 
-    puts("Testing getRandomMove...");
+    log_log("Testing getRandomMove...\n");
     UnscoredState state;
     stringToUnscoredState(&state, "111101111111111111111111111111111111111111111111111111111111111111111111"); 
     Edge edge = getRandomMove(&state);
-    printf("getRandomMove returned %d\n", edge);
+    log_log("getRandomMove returned %d\n", edge);
     assert(edge == 4);
 
     stringToUnscoredState(&state, "100111111111111111111111111111111111111111111111111111111111111111111111"); 
     edge = getRandomMove(&state);
     assert(edge == 1 || edge == 2);
 
-    puts("Testing getFirstBoxCompletingMove...");
+    log_log("Testing getFirstBoxCompletingMove...\n");
     stringToUnscoredState(&state, "010100000101000000101000000000000000000000000000000000000000000000000000"); 
     edge = getFirstBoxCompletingMove(&state);
-    printf("getFirstBoxCompletingMove returned %d\n", edge);
+    log_log("getFirstBoxCompletingMove returned %d\n", edge);
     assert(edge == 10);
 
     stringToUnscoredState(&state, "000000000000000000000000000000000000000000000000000000000000000000000000"); 
     edge = getFirstBoxCompletingMove(&state);
-    printf("getFirstBoxCompletingMove returned %d\n", edge);
+    log_log("getFirstBoxCompletingMove returned %d\n", edge);
     assert(edge == NO_EDGE);
 
-    puts("PLAYER_STRATEGY TESTS COMPLETED\n");
+    log_log("PLAYER_STRATEGY TESTS COMPLETED\n");
 }

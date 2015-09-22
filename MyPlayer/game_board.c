@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #include "game_board.h"
+#include "util.h"
 
 static const Edge getBoxEdgesTable[NUM_BOXES][4] = {
     {0,8,9,17},    {1,9,10,18},   {2,10,11,19},
@@ -221,9 +222,9 @@ void printUnscoredState(UnscoredState * state) {
 }
 
 void runGameBoardTests() {
-    printf("RUNNING GAME_BOARD TESTS\n");
+    log_log("RUNNING GAME_BOARD TESTS\n");
     
-    puts("Testing UnscoredState...");
+    log_log("Testing UnscoredState...\n");
     UnscoredState state;
     initUnscoredState(&state);
     stringToUnscoredState(&state, "1100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
@@ -233,7 +234,7 @@ void runGameBoardTests() {
         assert(state.edges[i] == FREE);
     }
 
-    printf("Testing getFreeEdges...\n");
+    log_log("Testing getFreeEdges...\n");
     stringToUnscoredState(&state, "101010101111111111111111111111111111111111111111111111111111111111111111");
     Edge freeEdges[NUM_EDGES];
     short numFreeEdges = getFreeEdges(&state, freeEdges);
@@ -243,7 +244,7 @@ void runGameBoardTests() {
     assert(freeEdges[2] == 5);
     assert(freeEdges[3] == 7);
 
-    printf("Testing getBoxEdges...\n");
+    log_log("Testing getBoxEdges...\n");
     const Edge * edges = getBoxEdges(0);
     assert(edges[0] == 0);
     assert(edges[1] == 8);
@@ -256,7 +257,7 @@ void runGameBoardTests() {
     assert(edges[2] == 14);
     assert(edges[3] == 22);
 
-    printf("Testing getEdgeBoxes...\n");
+    log_log("Testing getEdgeBoxes...\n");
     const Box * boxes = getEdgeBoxes(18);
     assert(boxes[0] == 1);
     assert(boxes[1] == 9);
@@ -273,7 +274,7 @@ void runGameBoardTests() {
     assert(boxes[0] == 24);
     assert(boxes[1] == NO_BOX);
 
-    printf("Testing getBoxNumTakenEdges...\n");
+    log_log("Testing getBoxNumTakenEdges...\n");
     stringToUnscoredState(&state, "102000001110000001010000000000000000000000000000010000000001000000000000");
     short numTakenEdges = getBoxNumTakenEdges(&state, 0);
     assert(numTakenEdges == 4);
@@ -285,7 +286,7 @@ void runGameBoardTests() {
     assert(numTakenEdges == 2);
 
 
-    printf("Printing example unscored state...\n");
+    log_log("Printing example unscored state...\n");
     initUnscoredState(&state);
     state.edges[2] = TAKEN;
     state.edges[10] = TAKEN;
@@ -299,7 +300,7 @@ void runGameBoardTests() {
     state.edges[14] = TAKEN;
     printUnscoredState(&state);
 
-    printf("Testing isBoxTaken...\n");
+    log_log("Testing isBoxTaken...\n");
     for(Box i=0; i<NUM_BOXES; i++) {
         if (i==2 || i==14)
             assert(isBoxTaken(&state, i) == true);
@@ -307,7 +308,7 @@ void runGameBoardTests() {
             assert(isBoxTaken(&state, i) == false);
     }
 
-    puts("Testing howManyBoxesDoesMoveComplete...");
+    log_log("Testing howManyBoxesDoesMoveComplete...\n");
     stringToUnscoredState(&state, "000000000000000000000000000000000000000000000000000000000000000000000000");
     assert(howManyBoxesDoesMoveComplete(&state, 0) == 0);
 
@@ -317,7 +318,7 @@ void runGameBoardTests() {
     stringToUnscoredState(&state, "110000001010000001100000000000000000000000000000000000000000000000000000");
     assert(howManyBoxesDoesMoveComplete(&state, 9) == 2);
 
-    puts("Testing getNumBoxesLeft...");
+    log_log("Testing getNumBoxesLeft...\n");
     stringToUnscoredState(&state, "000000000000000000000000000000000000000000000000000000000000000000000000");
     assert(getNumBoxesLeft(&state) == NUM_BOXES);
 
@@ -328,5 +329,5 @@ void runGameBoardTests() {
     assert(getNumBoxesLeft(&state) == NUM_BOXES - 1);
 
 
-    puts("GAME_BOARD TESTS COMPLETED\n");
+    log_log("GAME_BOARD TESTS COMPLETED\n");
 }
