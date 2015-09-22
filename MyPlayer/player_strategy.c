@@ -1,55 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <jansson.h>
 #include "game_board.h"
 #include "player_strategy.h"
-
-int randomInRange(unsigned int min, unsigned int max) {
-    // Credit: http://stackoverflow.com/questions/2509679/how-to-generate-a-random-number-from-within-a-range
-    int r;
-
-    const unsigned int range = 1 + max - min;
-    const unsigned int buckets = RAND_MAX / range;
-    const unsigned int limit = buckets * range;
-
-    /* Create equal size buckets all in a row, then fire randomly towards
-     * the buckets until you land in one of them. All buckets are equally
-     * likely. If you land off the end of the line of buckets, try again. */
-    do {
-        r = rand();
-    } while (r >= limit);
-
-    return min + (r / buckets);
-}
+#include "mcts.h"
+#include "util.h"
 
 Edge getRandomMove(UnscoredState * state) {
     Edge freeEdges[NUM_EDGES];
-    short numFreeEdges = 0;
-    for(short i=0; i<NUM_EDGES; i++) {
-        if (state->edges[i] == FREE)
-            freeEdges[numFreeEdges++] = i;
-    }
+    short numFreeEdges = getFreeEdges(state, freeEdges);
 
     return freeEdges[randomInRange(0, numFreeEdges-1)];
 }
 
+Edge getRandomMoveFromList(Edge * edges, short numEdges) {
+    return edges[randomInRange(0, numEdges-1)];
+}
+
 Edge getFirstBoxCompletingMove(UnscoredState * state) {
     const Edge * boxEdges;
-    Edge edge;
-    short boxScore; // How many of the box's edges are taken.
 
     for(Box b=0; b < NUM_BOXES; b++) {
-        boxEdges = getBoxEdges(b);
-        boxScore = 0;
+        if(getBoxNumTakenEdges(state, b) == 3) {
+            // Find the first free edge
+            boxEdges = getBoxEdges(b);
 
-        for(short i=0; i<4; i++) {
-            edge = boxEdges[i];
-            if (isEdgeTaken(state, edge))
-                boxScore++;
-        }
-
-        if(boxScore == 3) { // A box completing move is available
-            // Find the free edge:
             for(short i=0; i<4; i++) {
                 if (!isEdgeTaken(state, boxEdges[i]))
                     return boxEdges[i];
@@ -57,10 +33,10 @@ Edge getFirstBoxCompletingMove(UnscoredState * state) {
         }
     }
 
-    return -1;
+    return NO_EDGE;
 }
 
-Edge chooseMove(UnscoredState state, Strategy strategy) {
+Edge chooseMove(UnscoredState state, Strategy strategy, int iterations) {
     switch(strategy) {
         case RANDOM_MOVE:
             return getRandomMove(&state);
@@ -69,16 +45,22 @@ Edge chooseMove(UnscoredState state, Strategy strategy) {
             {
             Edge move = getFirstBoxCompletingMove(&state);
 
-            if (move != -1)
+            if (move != NO_EDGE)
                 return move;
             else
                 return getRandomMove(&state);
 
             }
             break;
+        case SIMPLE_MONTE_CARLO:
+            return getSimpleMCTSMove(&state, iterations);
+            break;
+        case MONTE_CARLO:
+            return getMCTSMove(&state, iterations, false);
+            break;
     }
 
-    return -1; // Avoid compiler warnings.
+    return NO_EDGE; // Avoid compiler warnings.
 }
 
 void runPlayerStrategyTests() {
@@ -104,7 +86,7 @@ void runPlayerStrategyTests() {
     stringToUnscoredState(&state, "000000000000000000000000000000000000000000000000000000000000000000000000"); 
     edge = getFirstBoxCompletingMove(&state);
     printf("getFirstBoxCompletingMove returned %d\n", edge);
-    assert(edge == -1);
+    assert(edge == NO_EDGE);
 
     puts("PLAYER_STRATEGY TESTS COMPLETED\n");
 }

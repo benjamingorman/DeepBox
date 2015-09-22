@@ -3,13 +3,15 @@
 
 typedef enum {
     RANDOM_MOVE,
-    FIRST_BOX_COMPLETING_MOVE
+    FIRST_BOX_COMPLETING_MOVE,
+    SIMPLE_MONTE_CARLO,
+    MONTE_CARLO
 } Strategy;
 
-int randomInRange(unsigned int, unsigned int);
 Edge getRandomMove(UnscoredState *);
+Edge getRandomMoveFromList(Edge * edges, short numEdges);
 Edge getFirstBoxCompletingMove(UnscoredState *);
-Edge chooseMove(UnscoredState, Strategy);
+Edge chooseMove(UnscoredState, Strategy, int);
 void runPlayerStrategyTests();
 
 #endif

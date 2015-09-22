@@ -10,8 +10,13 @@
 #define NUM_BOXES 28
 #define NUM_EDGES 72
 
+#define NO_BOX -1
+#define NO_EDGE -1
+#define NO_PLAYER -1
+
 typedef short Edge;
 typedef short Box;
+typedef short PlayerNum;
 
 typedef enum {
     FREE,
@@ -34,10 +39,17 @@ typedef struct {
 
 void initUnscoredState(UnscoredState *);
 void stringToUnscoredState(UnscoredState *, const char *);
+void setEdgeTaken(UnscoredState *, Edge);
+void setEdgeFree(UnscoredState *, Edge);
+short getNumFreeEdges(UnscoredState * state);
+short getNumBoxesLeft(UnscoredState * state);
+short getFreeEdges(UnscoredState *, Edge *);
 const Edge * getBoxEdges(Box);
 const Box * getEdgeBoxes(Edge);
+short getBoxNumTakenEdges(UnscoredState *, Box);
 bool isEdgeTaken(UnscoredState *, Edge);
 bool isBoxTaken(UnscoredState *, Box);
+short howManyBoxesDoesMoveComplete(UnscoredState *, Edge);
 void printUnscoredState(UnscoredState *);
 void runGameBoardTests();
 

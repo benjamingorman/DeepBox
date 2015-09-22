@@ -14,13 +14,17 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <regex.h>
+#include <jansson.h>
 #include "game_board.h"
 #include "player_clientside.h"
 #include "player_strategy.h"
+#include "mcts.h"
+#include "util.h"
 
 #define ACKNOWLEDGED "ACK"
 #define BUFSIZE 1025
-#define PLAYER_NAME "DeepBox"
+
+static const char * PLAYER_NAME = "DeepBox";
 
 bool parseServerMsg(
         const char * server_msg,
@@ -40,12 +44,9 @@ bool parseServerMsg(
     }
 
     regmatch_t matches[3];
-    // Execute regex
     reti = regexec(&regex, server_msg, 3, matches, 0);
 
     if (!reti) {
-        //printf("Match!\n");
-
         // Group 1 (command)
         int cmd_so = (int)matches[1].rm_so;
         int cmd_eo = (int)matches[1].rm_eo;
@@ -102,10 +103,12 @@ int main(int argc, char ** argv) {
     char * server_address = "localhost";
     char * server_port = "12345";
     bool run_tests = false;
+    char * strategyName = "random_move";
     Strategy strategy = RANDOM_MOVE;
+    int iterations = 1000;
 
     int option;
-    while((option = getopt(argc, argv, "a:p:ts:")) != -1) {
+    while((option = getopt(argc, argv, "a:p:ts:i:")) != -1) {
         switch(option) {
             case 'a':
                 server_address = optarg;
@@ -117,24 +120,34 @@ int main(int argc, char ** argv) {
                 run_tests = true;
                 break;
             case 's':
-                if(strcmp("random_move", optarg) == 0)
-                    strategy = RANDOM_MOVE;
-                    puts("Using strategy RANDOM_MOVE");
-                else if(strcmp("first_box_completing_move", optarg) == 0)
-                    puts("Using strategy FIRST_BOX_COMPLETING_MOVE");
-                    strategy = FIRST_BOX_COMPLETING_MOVE;
+                strategyName = optarg;
 
+                if(strcmp("random_move", strategyName) == 0)
+                    strategy = RANDOM_MOVE;
+                else if(strcmp("first_box_completing_move", strategyName) == 0)
+                    strategy = FIRST_BOX_COMPLETING_MOVE;
+                else if(strcmp("simple_monte_carlo", strategyName) == 0)
+                    strategy = SIMPLE_MONTE_CARLO;
+                else if(strcmp("monte_carlo", strategyName) == 0)
+                    strategy = MONTE_CARLO;
+                break;
+            case 'i':
+                iterations = atoi(optarg);
                 break;
         }
     }
 
     printf("Server address: %s\n", server_address);
     printf("Server port: %s\n", server_port);
+    printf("Using strategy: %s\n", strategyName);
+    printf("Iterations: %d\n", iterations);
 
     if (run_tests) {
         runGameBoardTests();
         runPlayerClientsideTests();
         runPlayerStrategyTests();
+        runMCTSTests();
+        runUtilTests();
         exit(0);
     }
 
@@ -203,10 +216,10 @@ int main(int argc, char ** argv) {
             sprintf(send_buf, ACKNOWLEDGED);
         }
         else if (parseServerMsg(recv_buf, cmd_buf, data_buf)) {
-            printf("Server command: %s\n Server data: %s\n", cmd_buf, data_buf);
+            printf("Server command: %s\nServer data: %s\n", cmd_buf, data_buf);
             if (strcmp(cmd_buf, "getName") == 0) {
-                printf("Recognized message 'getName'. My name is %s\n", PLAYER_NAME);
-                sprintf(send_buf, PLAYER_NAME);
+                printf("Recognized message 'getName'. My name is %s %s %d\n", PLAYER_NAME, strategyName, iterations);
+                sprintf(send_buf, "%s %s %d", PLAYER_NAME, strategyName, iterations);
             }
             else if (strcmp(cmd_buf, "newGame") == 0) {
                 printf("Recognized message 'newGame'. Sending ack.\n");
@@ -217,7 +230,7 @@ int main(int argc, char ** argv) {
                 printf("Recognized message 'chooseMove'.\n");
                 UnscoredState state;
                 stringToUnscoredState(&state, data_buf);
-                Edge move = chooseMove(state, strategy);
+                Edge move = chooseMove(state, strategy, iterations);
                 sprintf(send_buf, "%d", move);
             }
             else if (strcmp(cmd_buf, "gameOver") == 0) {

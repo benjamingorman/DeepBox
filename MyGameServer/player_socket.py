@@ -32,5 +32,3 @@ class PlayerSocket(object):
         self._socket.send("('gameOver', '"+winstate+"')")
         print self._socket.recv(1024) # used for client/server synchronisation purpose
         self._socket.close()
-    
-    

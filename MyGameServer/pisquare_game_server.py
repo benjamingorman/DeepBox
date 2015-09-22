@@ -6,6 +6,11 @@ import socket # Import socket module
 import time
 import random
 import datetime
+import sys
+
+if len(sys.argv) > 1:
+    print(sys.argv[1] + " games will be played.")
+    const.ROUNDS = int(sys.argv[1])
 
 def drawBoard(gui,board):
     # Draw dots
@@ -162,6 +167,8 @@ def playGame(gui,player1name,player2name,player1,player2,playsfirst,scorePlayer1
     stats.endGame()
     print("Stats:")
     print("Game duration: {0}".format(str(stats.getGameDuration())))
+    print("Player 1 score: " + str(scores[1]))
+    print("Player 2 score: " + str(scores[2]))
     print("Player 1 average response time: {0}".format(microsecondsToSecondsString(stats.getP1AverageTime())))
     print("Player 2 average response time: {0}".format(microsecondsToSecondsString(stats.getP2AverageTime())))
 
