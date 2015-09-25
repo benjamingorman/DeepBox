@@ -273,8 +273,9 @@ Edge getMCTSMove(UnscoredState * rootState, int runTimeMillis, bool saveTreeJSON
 
     log_log("\ngetMCTSMove: STARTING. Root node at %p, numPotentialMoves: %d\n", (void *)rootNode, rootNode->numPotentialMoves);
 
+    assert(runTimeMillis > 0);
     unsigned long long startTimeMillis = getTimeMillis();
-    unsigned long long endTimeMillis = startTimeMillis + runTimeMillis;
+    unsigned long long endTimeMillis = startTimeMillis + (unsigned long long)runTimeMillis;
     int iterationCount = 0;
 
     short rootNumBoxesLeft = getNumBoxesLeft(rootState);
@@ -362,7 +363,7 @@ static json_t * MCTSNodeToJSON(const MCTSNode * node) {
 }
 
 void runMCTSTests() {
-    log_log("RUNNING MCTS TESTS");
+    log_log("RUNNING MCTS TESTS\n");
 
     log_log("\nTesting initMCTSNode...\n");
     UnscoredState rootState;

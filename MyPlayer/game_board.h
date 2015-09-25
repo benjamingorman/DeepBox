@@ -48,6 +48,7 @@ void stringToUnscoredState(UnscoredState *, const char *);
 void setEdgeTaken(UnscoredState *, Edge);
 void setEdgeFree(UnscoredState *, Edge);
 short getNumFreeEdges(const UnscoredState * state);
+short getRemainingBoxes(const UnscoredState * state, Box * boxBuffer);
 short getNumBoxesLeft(const UnscoredState * state);
 short getFreeEdges(const UnscoredState *, Edge *);
 const Edge * getBoxEdges(Box);

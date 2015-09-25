@@ -144,8 +144,10 @@ int main(int argc, char ** argv) {
                     strategy = MONTE_CARLO;
                 else if(strcmp("alpha_beta", strategyName) == 0)
                     strategy = ALPHA_BETA;
+                else if(strcmp("deepbox1", strategyName) == 0)
+                    strategy = DEEPBOX1;
                 else
-                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta}.\n", strategyName);
+                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta, deepbox1}.\n", strategyName);
                 break;
             case 'i':
                 turnTimeMillis = atoi(optarg);
@@ -159,15 +161,16 @@ int main(int argc, char ** argv) {
     log_log("Server address: %s\n", server_address);
     log_log("Server port: %s\n", server_port);
     log_log("Using strategy: %s\n", strategyName);
-    log_log("Time per turn (millis): %d\n", turnTimeMillis);
+    log_log("Time per turn (millis): %d.\n", turnTimeMillis);
 
     if (run_tests) {
         runGameBoardTests();
         runPlayerClientsideTests();
         runPlayerStrategyTests();
         runUtilTests();
-        //runMCTSTests();
+        runMCTSTests();
         runAlphaBetaTests();
+        runGraphsTests();
         
         exit(0);
     }

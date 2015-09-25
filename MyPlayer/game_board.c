@@ -178,6 +178,17 @@ short getNumFreeEdges(const UnscoredState * state) {
     return freeEdges;
 }
 
+short getRemainingBoxes(const UnscoredState * state, Box * boxBuffer) {
+    short numBoxesLeft = 0;
+
+    for(Box b=0; b < NUM_BOXES; b++) {
+        if (!isBoxTaken(state, b))
+            boxBuffer[numBoxesLeft++] = b;
+    }
+
+    return numBoxesLeft;
+}
+
 short getNumBoxesLeft(const UnscoredState * state) {
     short numBoxesLeft = NUM_BOXES;
 

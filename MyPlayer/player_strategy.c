@@ -37,7 +37,67 @@ Edge getFirstBoxCompletingMove(UnscoredState * state) {
     return NO_EDGE;
 }
 
+Edge getMoveAlways4Never3(UnscoredState * state) {
+    // Returns a box completing move if one exists.
+    // Else returns a move which does not form the 3rd edge of a box.
+    // Else returns a random move.
+    
+    Edge move = getFirstBoxCompletingMove(state);
+    if (move != NO_EDGE) {
+        log_debug("always4never3: return a box completing move\n");
+        return move;
+    }
+    else {
+        Edge potentialMoves[NUM_EDGES];
+        short numPotentialMoves = getFreeEdges(state, potentialMoves);
+        log_debug("always4never3: numPotentialMoves is %d\n", numPotentialMoves);
+
+        for (short i=0; i < numPotentialMoves; i++) {
+            Edge e = potentialMoves[i];
+            const Box * edgeBoxes = getEdgeBoxes(e);
+            Box b0 = edgeBoxes[0];
+            Box b1 = edgeBoxes[1];
+
+            short b0takenEdges = 0;
+            if (b0 != NO_BOX)
+                b0takenEdges = getBoxNumTakenEdges(state, b0);
+
+            short b1takenEdges = 0;
+            if (b1 != NO_BOX)
+                b1takenEdges = getBoxNumTakenEdges(state, b1);
+
+            if (b0takenEdges <= 1 && b1takenEdges <= 1) {
+                log_debug("always4never3: return a not-3 move\n");
+                return e;
+            }
+        }
+
+        // If at this point no edge has been found, then just return a random one.
+        log_debug("always4never3: returning a random move\n");
+        return getRandomMoveFromList(potentialMoves, numPotentialMoves);
+    }
+}
+
+Edge getDeepBox1Move(UnscoredState * state, int turnTimeMillis) {
+    short numEdgesLeft = getNumFreeEdges(state);
+
+    if (numEdgesLeft <= 14) {
+        log_log("Using alpha-beta strategy...\n");
+        return getABMove(state, 14, false);
+    }
+    else if (numEdgesLeft <= 40) {
+        log_log("Using monte-carlo strategy...\n");
+        return getMCTSMove(state, turnTimeMillis, false);
+    }
+    else {
+        log_log("Using always4never3 strategy...\n");
+        return getMoveAlways4Never3(state);
+    }
+}
+
 Edge chooseMove(UnscoredState state, Strategy strategy, int turnTimeMillis) {
+    assert(turnTimeMillis > 0);
+
     switch(strategy) {
         case RANDOM_MOVE:
             return getRandomMove(&state);
@@ -58,6 +118,8 @@ Edge chooseMove(UnscoredState state, Strategy strategy, int turnTimeMillis) {
             break;
         case ALPHA_BETA:
             return getABMove(&state, 20, false);
+        case DEEPBOX1:
+            return getDeepBox1Move(&state, turnTimeMillis);
             break;
     }
 
