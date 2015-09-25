@@ -7,6 +7,7 @@
 #include "game_board.h"
 #include "util.h"
 
+// PiSquare board:
 static const Edge getBoxEdgesTable[NUM_BOXES][4] = {
     {0,8,9,17},    {1,9,10,18},   {2,10,11,19},
     {3,11,12,20},  {4,12,13,21},  {5,13,14,22},
@@ -34,6 +35,102 @@ static const Box getEdgeBoxesTable[NUM_EDGES][2] = {
     {24,NO_BOX}, {25,NO_BOX}, {26,NO_BOX}, {27,NO_BOX} 
 };
 
+// corner pairs: {0,8} {7,16} {25,34} {33,41} {62,68} {64,69} {65,70} {67,71} 
+// sorted: 0,8,7,16, 25 ,33,34,41,  62,  64,65,68, 67, 69,70,71
+Edge getCorrespondingCornerEdge(Edge e) {
+    // Because the set of corner edges is so small, the most efficient, alebit ugly thing to do
+    // is a hard-coded binary search.
+    // Returns NO_EDGE if e is not a corner edge.
+    if (e == 62)
+        return 68;
+    else if (e < 62) {
+        if (e == 25)
+            return 34;
+        else if (e < 25) {
+            switch(e) {
+                case 0: return 8; break;
+                case 8: return 0; break;
+                case 7: return 16; break;
+                case 16: return 7; break;
+            }
+        }
+        else { // e > 25
+            switch (e) {
+                case 33: return 41; break;
+                case 34: return 25; break;
+                case 41: return 33; break;
+            }
+        }
+    }
+    else { // e > 62
+        if (e == 67)
+            return 71;
+        else if (e < 67) {
+            switch (e) {
+                case 64: return 69; break;
+                case 65: return 70; break;
+                case 68: return 62; break;
+            }
+        }
+        else {
+            switch (e) {
+                case 69: return 64; break;
+                case 70: return 65; break;
+                case 71: return 67; break;
+            }
+        }
+    }
+
+    return NO_EDGE;
+}
+
+/*
+// 3x3 board:
+static const Edge getBoxEdgesTable[NUM_BOXES][4] = {
+    {0,3,4,7}, {1,4,5,8}, {2,5,6,9},
+    {7,10,11,14}, {8,11,12,15}, {9,12,13,16},
+    {14,17,18,21}, {15,18,19,22}, {16,19,20,23}
+};
+
+static const Box getEdgeBoxesTable[NUM_EDGES][2] = {
+    {0,NO_BOX}, {1,NO_BOX}, {2,NO_BOX},
+    {0,NO_BOX}, {0,1}, {1,2}, {2,NO_BOX},
+    {0,3}, {1,4}, {2,5},
+    {3,NO_BOX}, {3,4}, {4,5}, {5,NO_BOX},
+    {3,6}, {4,7}, {5,8},
+    {6,NO_BOX}, {6,7}, {7,8}, {8,NO_BOX},
+    {6,NO_BOX}, {7, NO_BOX}, {8,NO_BOX}
+};
+
+// 3x3 grid corners: 0,3 2,6 17,21 20,23
+// sorted: 0,2,3,6,17,20,21,23
+
+Edge getCorrespondingCornerEdge(Edge e) {
+    if (e == 17)
+        return 21;
+    else if (e < 17) {
+        if (e == 0)
+            return 3;
+        else if (e == 2)
+            return 6;
+        else if (e == 3)
+            return 0;
+        else if (e == 6)
+            return 2;
+    }
+    else { // e > 17
+        if (e == 20)
+            return 23;
+        else if (e == 21)
+            return 17;
+        else if (e == 23)
+            return 20;
+    }
+
+    return NO_EDGE;
+}
+*/
+
 void initUnscoredState(UnscoredState * state) {
     for (Edge e=0; e<NUM_EDGES; e++) {
         setEdgeFree(state, e);
@@ -59,7 +156,7 @@ void setEdgeFree(UnscoredState * state, Edge e) {
     state->edges[e] = FREE;
 }
 
-short getFreeEdges(UnscoredState * state, Edge * freeEdgesBuffer) {
+short getFreeEdges(const UnscoredState * state, Edge * freeEdgesBuffer) {
     short numFreeEdges = 0;
 
     for(Edge e=0; e<NUM_EDGES; e++) {
@@ -70,7 +167,7 @@ short getFreeEdges(UnscoredState * state, Edge * freeEdgesBuffer) {
     return numFreeEdges;
 }
 
-short getNumFreeEdges(UnscoredState * state) {
+short getNumFreeEdges(const UnscoredState * state) {
     short freeEdges=0;
 
     for(short i=0; i<NUM_EDGES; i++) {
@@ -81,7 +178,7 @@ short getNumFreeEdges(UnscoredState * state) {
     return freeEdges;
 }
 
-short getNumBoxesLeft(UnscoredState * state) {
+short getNumBoxesLeft(const UnscoredState * state) {
     short numBoxesLeft = NUM_BOXES;
 
     for(short i=0; i<NUM_BOXES; i++) {
@@ -100,7 +197,7 @@ const Box * getEdgeBoxes(Edge e) {
     return getEdgeBoxesTable[e];
 }
 
-short getBoxNumTakenEdges(UnscoredState * state, Box b) {
+short getBoxNumTakenEdges(const UnscoredState * state, Box b) {
     const Edge * boxEdges = getBoxEdges(b);
     short numTakenEdges = 0;
 
@@ -112,11 +209,11 @@ short getBoxNumTakenEdges(UnscoredState * state, Box b) {
     return numTakenEdges;
 }
 
-bool isEdgeTaken(UnscoredState * state, Edge e) {
+bool isEdgeTaken(const UnscoredState * state, Edge e) {
     return state->edges[e] == TAKEN;
 }
 
-bool isBoxTaken(UnscoredState * state, Box b) {
+bool isBoxTaken(const UnscoredState * state, Box b) {
     const Edge * boxEdges = getBoxEdges(b);
 
     for (short i=0; i<4; i++) {
@@ -126,7 +223,7 @@ bool isBoxTaken(UnscoredState * state, Box b) {
     return true;
 }
 
-short howManyBoxesDoesMoveComplete(UnscoredState * state, Edge edge) {
+short howManyBoxesDoesMoveComplete(const UnscoredState * state, Edge edge) {
     short numCompleted = 0;
     const Box * boxes = getEdgeBoxes(edge);
 
@@ -141,12 +238,15 @@ short howManyBoxesDoesMoveComplete(UnscoredState * state, Edge edge) {
     return numCompleted;
 }
 
-void printUnscoredState(UnscoredState * state) {
+bool isBoxCompletingMove(const UnscoredState * state, Edge move) {
+    return howManyBoxesDoesMoveComplete(state, move) > 0;
+}
+
+void printUnscoredState(const UnscoredState * state) {
     wchar_t vertical = L'|';
     wchar_t horizontal = L'―';
     wchar_t dot = L'•';
-    wchar_t cross = L'✕';
-    wchar_t empty = L' ';
+    wchar_t cross = L'✕'; wchar_t empty = L' ';
 
     printf("%lc", dot);
     short ei = 0; // edge index
@@ -329,5 +429,5 @@ void runGameBoardTests() {
     assert(getNumBoxesLeft(&state) == NUM_BOXES - 1);
 
 
-    log_log("GAME_BOARD TESTS COMPLETED\n");
+    log_log("GAME_BOARD TESTS COMPLETED\n\n");
 }

@@ -5,6 +5,7 @@
 #include "game_board.h"
 #include "player_strategy.h"
 #include "mcts.h"
+#include "alphabeta.h"
 #include "util.h"
 
 Edge getRandomMove(UnscoredState * state) {
@@ -36,7 +37,7 @@ Edge getFirstBoxCompletingMove(UnscoredState * state) {
     return NO_EDGE;
 }
 
-Edge chooseMove(UnscoredState state, Strategy strategy, int iterations) {
+Edge chooseMove(UnscoredState state, Strategy strategy, int turnTimeMillis) {
     switch(strategy) {
         case RANDOM_MOVE:
             return getRandomMove(&state);
@@ -52,11 +53,11 @@ Edge chooseMove(UnscoredState state, Strategy strategy, int iterations) {
 
             }
             break;
-        case SIMPLE_MONTE_CARLO:
-            return getSimpleMCTSMove(&state, iterations);
-            break;
         case MONTE_CARLO:
-            return getMCTSMove(&state, iterations, false);
+            return getMCTSMove(&state, turnTimeMillis, false);
+            break;
+        case ALPHA_BETA:
+            return getABMove(&state, 20, false);
             break;
     }
 
@@ -88,5 +89,5 @@ void runPlayerStrategyTests() {
     log_log("getFirstBoxCompletingMove returned %d\n", edge);
     assert(edge == NO_EDGE);
 
-    log_log("PLAYER_STRATEGY TESTS COMPLETED\n");
+    log_log("PLAYER_STRATEGY TESTS COMPLETED\n\n");
 }

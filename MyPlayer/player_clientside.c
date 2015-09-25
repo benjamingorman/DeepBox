@@ -19,12 +19,14 @@
 #include "player_clientside.h"
 #include "player_strategy.h"
 #include "mcts.h"
+#include "alphabeta.h"
 #include "util.h"
 
 #define ACKNOWLEDGED "ACK"
 #define BUFSIZE 1025
 
 static const char * PLAYER_NAME = "DeepBox";
+int LOG_LEVEL = LOG_LEVEL_LOG;
 
 bool parseServerMsg(
         const char * server_msg,
@@ -93,21 +95,35 @@ void runPlayerClientsideTests() {
     assert(success == true);
     assert(strcmp(cmd_buf, "getName") == 0);
     assert(strcmp(data_buf, "1") == 0);
-    log_log("PLAYER_CLIENTSIDE TESTS COMPLETED\n");
+    log_log("PLAYER_CLIENTSIDE TESTS COMPLETED\n\n");
 }
 
 int main(int argc, char ** argv) {
     setlocale(LC_ALL, ""); // for unicode printing
+    LOG_LEVEL = LOG_LEVEL_LOG; // defined in util.h
     char * server_address = "localhost";
     char * server_port = "12345";
     bool run_tests = false;
     char * strategyName = "random_move";
     Strategy strategy = RANDOM_MOVE;
-    int iterations = 1000;
+    int turnTimeMillis = 1000;
+    bool runningExamplePosition = false; // if -x flag is given then a position is expected on standard input.
 
     int option;
-    while((option = getopt(argc, argv, "a:p:ts:i:")) != -1) {
+    while((option = getopt(argc, argv, "l:a:p:ts:i:x")) != -1) {
         switch(option) {
+            case 'l':
+                if(strcmp("debug", optarg) == 0)
+                    LOG_LEVEL = LOG_LEVEL_DEBUG;
+                else if(strcmp("log", optarg) == 0)
+                    LOG_LEVEL = LOG_LEVEL_LOG;
+                else if(strcmp("warn", optarg) == 0)
+                    LOG_LEVEL = LOG_LEVEL_WARN;
+                else if(strcmp("error", optarg) == 0)
+                    LOG_LEVEL = LOG_LEVEL_ERROR;
+                else
+                    fprintf(stderr, "Unrecognised log level: %s. Available options are {debug, log, warn, error}.\n", optarg);
+                break;
             case 'a':
                 server_address = optarg;
                 break;
@@ -124,13 +140,18 @@ int main(int argc, char ** argv) {
                     strategy = RANDOM_MOVE;
                 else if(strcmp("first_box_completing_move", strategyName) == 0)
                     strategy = FIRST_BOX_COMPLETING_MOVE;
-                else if(strcmp("simple_monte_carlo", strategyName) == 0)
-                    strategy = SIMPLE_MONTE_CARLO;
                 else if(strcmp("monte_carlo", strategyName) == 0)
                     strategy = MONTE_CARLO;
+                else if(strcmp("alpha_beta", strategyName) == 0)
+                    strategy = ALPHA_BETA;
+                else
+                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta}.\n", strategyName);
                 break;
             case 'i':
-                iterations = atoi(optarg);
+                turnTimeMillis = atoi(optarg);
+                break;
+            case 'x':
+                runningExamplePosition = true;
                 break;
         }
     }
@@ -138,16 +159,34 @@ int main(int argc, char ** argv) {
     log_log("Server address: %s\n", server_address);
     log_log("Server port: %s\n", server_port);
     log_log("Using strategy: %s\n", strategyName);
-    log_log("Iterations: %d\n", iterations);
+    log_log("Time per turn (millis): %d\n", turnTimeMillis);
 
     if (run_tests) {
         runGameBoardTests();
         runPlayerClientsideTests();
         runPlayerStrategyTests();
-        runMCTSTests();
         runUtilTests();
+        //runMCTSTests();
+        runAlphaBetaTests();
+        
         exit(0);
     }
+    else if (runningExamplePosition) {
+        char stateBuf[NUM_EDGES];
+        if(fgets(stateBuf, sizeof(char) * (NUM_EDGES+1), stdin) == NULL) {
+            fprintf(stderr, "Error opening example file. Exiting.\n");
+            exit(1);
+        }
+
+        UnscoredState state;
+        stringToUnscoredState(&state, stateBuf);
+        Edge move = chooseMove(state, strategy, turnTimeMillis);
+
+        log_log("CHOSE MOVE: %d\n", move);
+
+        exit(0);
+    }
+    // else connect to the server and proceed into a game
 
     // Create socket
     int sockfd, portno, n;
@@ -218,8 +257,8 @@ int main(int argc, char ** argv) {
         else if (parseServerMsg(recv_buf, cmd_buf, data_buf)) {
             log_log("Server command: %s\nServer data: %s\n", cmd_buf, data_buf);
             if (strcmp(cmd_buf, "getName") == 0) {
-                log_log("Recognized message 'getName'. My name is %s %s %d\n", PLAYER_NAME, strategyName, iterations);
-                sprintf(send_buf, "%s %s %d", PLAYER_NAME, strategyName, iterations);
+                log_log("Recognized message 'getName'. My name is %s %s %d\n", PLAYER_NAME, strategyName, turnTimeMillis);
+                sprintf(send_buf, "%s %s %d", PLAYER_NAME, strategyName, turnTimeMillis);
             }
             else if (strcmp(cmd_buf, "newGame") == 0) {
                 log_log("Recognized message 'newGame'. Sending ack.\n");
@@ -230,7 +269,7 @@ int main(int argc, char ** argv) {
                 log_log("Recognized message 'chooseMove'.\n");
                 UnscoredState state;
                 stringToUnscoredState(&state, data_buf);
-                Edge move = chooseMove(state, strategy, iterations);
+                Edge move = chooseMove(state, strategy, turnTimeMillis);
                 sprintf(send_buf, "%d", move);
             }
             else if (strcmp(cmd_buf, "gameOver") == 0) {

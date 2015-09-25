@@ -7,8 +7,13 @@
 #define P2_COLOUR "\x1b[34m"
 #define COLOUR_RESET "\x1b[0m"
 
+// PiSquare board:
 #define NUM_BOXES 28
 #define NUM_EDGES 72
+
+// 3x3 board:
+// #define NUM_BOXES 9
+// #define NUM_EDGES 24
 
 #define NO_BOX -1
 #define NO_EDGE -1
@@ -37,20 +42,22 @@ typedef struct {
     Edge moves[NUM_EDGES];
 } Game;
 
+Edge getCorrespondingCornerEdge(Edge e);
 void initUnscoredState(UnscoredState *);
 void stringToUnscoredState(UnscoredState *, const char *);
 void setEdgeTaken(UnscoredState *, Edge);
 void setEdgeFree(UnscoredState *, Edge);
-short getNumFreeEdges(UnscoredState * state);
-short getNumBoxesLeft(UnscoredState * state);
-short getFreeEdges(UnscoredState *, Edge *);
+short getNumFreeEdges(const UnscoredState * state);
+short getNumBoxesLeft(const UnscoredState * state);
+short getFreeEdges(const UnscoredState *, Edge *);
 const Edge * getBoxEdges(Box);
 const Box * getEdgeBoxes(Edge);
-short getBoxNumTakenEdges(UnscoredState *, Box);
-bool isEdgeTaken(UnscoredState *, Edge);
-bool isBoxTaken(UnscoredState *, Box);
-short howManyBoxesDoesMoveComplete(UnscoredState *, Edge);
-void printUnscoredState(UnscoredState *);
+short getBoxNumTakenEdges(const UnscoredState *, Box);
+bool isEdgeTaken(const UnscoredState *, Edge);
+bool isBoxTaken(const UnscoredState *, Box);
+short howManyBoxesDoesMoveComplete(const UnscoredState *, Edge);
+bool isBoxCompletingMove(const UnscoredState * state, Edge move);
+void printUnscoredState(const UnscoredState *);
 void runGameBoardTests();
 
 #endif

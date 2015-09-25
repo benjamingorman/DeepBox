@@ -1,0 +1,13 @@
+Release target: Friday
+x Add good logging (DEBUG, LOG, WARN etc.)
+x Sort out scoring problem
+- Remove state from MCTSNode
+- Add tree/default policy heuristics
+- Add JSON logging of each MCTS iteration
+x Write human client
+- Add JSON logging to server for each game
+x Tidy up code (especially in mcts.c)
+- Add multithreaded iterations
+- Add never3/always4 strategy
+- Clean up alphabeta sorting / filtering code
+x Write alphabeta implementation
