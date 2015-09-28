@@ -3,7 +3,7 @@ x Add good logging (DEBUG, LOG, WARN etc.)
 x Sort out scoring problem
 - Remove state from MCTSNode
 - Add tree/default policy heuristics
-- Add JSON logging of each MCTS iteration
+x Add JSON logging of each MCTS iteration
 x Write human client
 - Add JSON logging to server for each game
 x Tidy up code (especially in mcts.c)
@@ -13,10 +13,10 @@ x Tidy up code (especially in mcts.c)
 x Write alphabeta implementation
 
 x Fix getSubGraphs
-- Convert adjMat to char[]
-- Cake identification
-- Loop identification
-- Chain identification
+x Convert adjMat to char[]
+x Cake identification
+x Loop identification
+x Chain identification
 - Create return type to outline wehther a move is a cake / if there is a set of sensible moves.
 - Stack based alpha-beta
 - Heuristics for depth limited alpha beta

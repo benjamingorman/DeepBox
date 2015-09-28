@@ -186,6 +186,8 @@ int main(int argc, char ** argv) {
 
         UnscoredState state;
         stringToUnscoredState(&state, stateBuf);
+        log_log("Considering example board:\n");
+        printUnscoredState(&state);
         Edge move = chooseMove(state, strategy, turnTimeMillis);
 
         log_log("CHOSE MOVE: %d\n", move);
