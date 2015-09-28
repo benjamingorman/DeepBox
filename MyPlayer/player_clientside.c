@@ -21,6 +21,7 @@
 #include "mcts.h"
 #include "alphabeta.h"
 #include "util.h"
+#include "graphs.h"
 
 #define ACKNOWLEDGED "ACK"
 #define BUFSIZE 1025
@@ -164,12 +165,14 @@ int main(int argc, char ** argv) {
     log_log("Time per turn (millis): %d.\n", turnTimeMillis);
 
     if (run_tests) {
+        /*
         runGameBoardTests();
         runPlayerClientsideTests();
         runPlayerStrategyTests();
         runUtilTests();
         runMCTSTests();
         runAlphaBetaTests();
+        */
         runGraphsTests();
         
         exit(0);

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
-#include <jansson.h>
+// #include <jansson.h>
 #include <sys/time.h>
 #include "game_board.h"
 #include "mcts.h"
@@ -19,8 +19,8 @@ static MCTSNode * addChildToMCTSNode(MCTSNode * parentNode, Edge move);
 static double applyDefaultPolicy(const MCTSNode * leafNode, short rootNumBoxesLeft);
 static void backpropagateResult(MCTSNode * node, PlayerNum scoreFirstPlayer, double score);
 static MCTSNode * getMostVisitedChild(MCTSNode * node);
-static void saveMCTSNodeJSON(const MCTSNode * node, const char * filePath);
-static json_t * MCTSNodeToJSON(const MCTSNode * node);
+//static void saveMCTSNodeJSON(const MCTSNode * node, const char * filePath);
+//static json_t * MCTSNodeToJSON(const MCTSNode * node);
 
 
 static void initMCTSNode(MCTSNode * node, MCTSNode * parent, UnscoredState state, PlayerNum playerJustMoved, Edge move) {
@@ -158,7 +158,7 @@ static short getUntriedMovesMCTSNode(MCTSNode * node, Edge * untriedMovesBuffer)
     else {
         // Build a binary search tree with the already-tried child moves.
         // This is far more efficient than using a list.
-        BTree * triedMoves = initBTree(child->move);
+        BTree * triedMoves = newBTree(child->move);
 
         while((child = child->sibling) != NULL) {
             insertBTree(triedMoves, child->move);
@@ -307,14 +307,17 @@ Edge getMCTSMove(UnscoredState * rootState, int runTimeMillis, bool saveTreeJSON
     log_log("Returning child with most visits...\n");
 Edge bestMove = getMostVisitedChild(rootNode)->move;
 
+    /*
     if(saveTreeJSON)
         saveMCTSNodeJSON(rootNode, "rootNode.json");
+    */
 
     freeMCTSNode(rootNode);
 
     return bestMove;
 }
 
+/*
 static void saveMCTSNodeJSON(const MCTSNode * node, const char * filePath) {
     json_t * j = MCTSNodeToJSON(node);
     json_dump_file(j, filePath, 0);
@@ -361,6 +364,7 @@ static json_t * MCTSNodeToJSON(const MCTSNode * node) {
             "children", children_array);
     return j;
 }
+*/
 
 void runMCTSTests() {
     log_log("RUNNING MCTS TESTS\n");
@@ -488,7 +492,7 @@ void runMCTSTests() {
     assert(getMostVisitedChild(rootNode) == firstChild);
 
     log_log("\nSaving test tree JSON...\n");
-    saveMCTSNodeJSON(rootNode, "testTree.json");
+    // saveMCTSNodeJSON(rootNode, "testTree.json");
 
     log_log("\nTesting getMCTSMove...\n");
     log_debug("It should return a sensible result. (Saving JSON)\n");

@@ -58,6 +58,7 @@ bool isEdgeTaken(const UnscoredState *, Edge);
 bool isBoxTaken(const UnscoredState *, Box);
 short howManyBoxesDoesMoveComplete(const UnscoredState *, Edge);
 bool isBoxCompletingMove(const UnscoredState * state, Edge move);
+Edge boxPairToEdge(Box b1, Box b2);
 void printUnscoredState(const UnscoredState *);
 void runGameBoardTests();
 

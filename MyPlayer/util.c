@@ -5,7 +5,7 @@
 #include <sys/time.h>
 #include "util.h"
 
-BTree * initBTree(int value) {
+BTree * newBTree(int value) {
     BTree * bt = (BTree *)malloc(sizeof(BTree));
     bt->value = value;
     bt->left = NULL;
@@ -27,7 +27,7 @@ BTree * insertBTree(BTree * bt, int value) {
         return bt;
     else if (value < bt->value) {
         if (bt->left == NULL) {
-            bt->left = initBTree(value);
+            bt->left = newBTree(value);
             return bt->left;
         }
         else
@@ -35,7 +35,7 @@ BTree * insertBTree(BTree * bt, int value) {
     }
     else { // value > bt->value
         if (bt->right == NULL) {
-            bt->right = initBTree(value);
+            bt->right = newBTree(value);
             return bt->right;
         }
         else
@@ -106,9 +106,9 @@ void runUtilTests() {
     r = randomInRange(0,1);
     assert(r == 0 || r == 1);
 
-    log_log("Testing initBTree...\n");
+    log_log("Testing newBTree...\n");
     log_debug("It should initialize the values correctly.\n");
-    BTree * btRoot = initBTree(3);
+    BTree * btRoot = newBTree(3);
     assert(btRoot->value == 3);
     assert(btRoot->left == NULL);
     assert(btRoot->right == NULL);

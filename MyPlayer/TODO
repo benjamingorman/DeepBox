@@ -11,3 +11,13 @@ x Tidy up code (especially in mcts.c)
 - Add never3/always4 strategy
 - Clean up alphabeta sorting / filtering code
 x Write alphabeta implementation
+
+x Fix getSubGraphs
+- Convert adjMat to char[]
+- Cake identification
+- Loop identification
+- Chain identification
+- Create return type to outline wehther a move is a cake / if there is a set of sensible moves.
+- Stack based alpha-beta
+- Heuristics for depth limited alpha beta
+- Test midgame performance vs sensible-move-monte-carlo

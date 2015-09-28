@@ -23,7 +23,7 @@ typedef struct BTree {
     struct BTree * right;
 } BTree;
 
-BTree * initBTree(int value);
+BTree * newBTree(int value);
 void freeBTree(BTree * bt);
 BTree * insertBTree(BTree * bt, int value);
 bool doesBTreeContain(BTree * bt, int value);

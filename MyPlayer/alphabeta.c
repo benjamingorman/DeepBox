@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <jansson.h>
+//#include <jansson.h>
 #include "game_board.h"
 #include "util.h"
 #include "alphabeta.h"
@@ -9,8 +9,8 @@
 static const short ALPHA_MIN = -100;
 static const short BETA_MAX = 100;
 
-static void saveABNodeJSON(const ABNode * node, UnscoredState state, const char * filePath);
-static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state);
+//static void saveABNodeJSON(const ABNode * node, UnscoredState state, const char * filePath);
+//static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state);
 
 static ABNode * newABRootNode(const UnscoredState * rootState) {
     ABNode * node = (ABNode *)malloc(sizeof(ABNode));
@@ -109,7 +109,7 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
     Edge potentialMoves[NUM_EDGES];
     short numPotentialMoves = 0;
     {
-        BTree * excludedCornerSet = initBTree(NO_EDGE); 
+        BTree * excludedCornerSet = newBTree(NO_EDGE); 
 
         short numBoxCompletingMoves = 0;
         Edge boxCompletingMoves[NUM_EDGES];
@@ -230,10 +230,12 @@ Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
 
     log_log("getABMove: best move is %d\n", bestMove);
 
+    /*
     if (saveJSON) {
         log_log("Saving root node JSON to abRootNode.json\n");
         saveABNodeJSON(rootNode, rootState, "abRootNode.json");
     }
+    */
 
     freeABNode(rootNode);
 
@@ -245,6 +247,7 @@ Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
     return bestMove;
 }
 
+/*
 static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state) {
     json_t * j;
 
@@ -266,14 +269,6 @@ static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state) {
     char nodePointerString[32];
     sprintf(nodePointerString, "%p", (void *)node);
 
-    /*
-    char potentialMovesBuffer[512];
-    char * p = potentialMovesBuffer;
-    for(short i=0; i < node->numPotentialMoves; i++) {
-        sprintf(p, "%02d,", node->potentialMoves[i]);
-        p += 3;
-    }
-    */
 
     json_t * children_array = json_array();
     ABNode * child = node->child;
@@ -305,6 +300,7 @@ static void saveABNodeJSON(const ABNode * node, UnscoredState rootState, const c
     json_dump_file(j, filePath, 0);
     json_decref(j);
 }
+*/
 
 void runAlphaBetaTests() {
     log_log("RUNNING ALPHA BETA TESTS\n");

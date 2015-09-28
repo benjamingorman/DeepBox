@@ -331,7 +331,7 @@ def main():
         </body>
     </html>""".format(tree.getTitle(), data)
     else:
-        return """<!DOCTYPE html>
+        s = """<!DOCTYPE html>
     <html>
         <head>
             <meta charset="UTF-8">
@@ -524,6 +524,10 @@ def main():
             </script>
         </body>
     </html>""".format(tree.getTitle(), data)
+        with open("alpha_beta_page.html", "w") as f:
+            f.write(s)
+
+        return s
 
 if __name__ == '__main__':
     #os.system("xdg-open http://localhost:5000/")

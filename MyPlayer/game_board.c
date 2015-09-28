@@ -253,6 +253,32 @@ bool isBoxCompletingMove(const UnscoredState * state, Edge move) {
     return howManyBoxesDoesMoveComplete(state, move) > 0;
 }
 
+Edge boxPairToEdge(Box b1, Box b2) {
+    // Returns the one edge common to both boxes.
+    // Either can be NO_BOX.
+    const Edge * edges;
+    if (b1 != NO_BOX)
+        edges = getBoxEdges(b1);
+    else if (b2 != NO_BOX)
+        edges = getBoxEdges(b2);
+    else {
+        log_error("[ERROR] boxPairToEdge: Both arguments are NO_BOX!\n");
+        return NO_EDGE;
+    }
+
+    for (short i=0; i < 4; i++) {
+        Edge e = edges[i];
+
+        const Box * edgeBoxes = getEdgeBoxes(e);
+        if (edgeBoxes[0] == b1 && edgeBoxes[1] == b2 ||
+            edgeBoxes[1] == b1 && edgeBoxes[0] == b2)
+            return e;
+    }
+
+    log_error("[ERROR] boxPairToEdge: No common edge found for boxes %d and %d!\n", b1, b2);
+    return NO_EDGE;
+}
+
 void printUnscoredState(const UnscoredState * state) {
     wchar_t vertical = L'|';
     wchar_t horizontal = L'―';
