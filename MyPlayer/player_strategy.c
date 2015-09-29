@@ -86,7 +86,7 @@ Edge getDeepBox1Move(UnscoredState * state, int turnTimeMillis) {
         log_log("Using alpha-beta strategy...\n");
         return getABMove(state, 14, false);
     }
-    else if (numEdgesLeft <= 40) {
+    else if (numEdgesLeft <= 33) {
         log_log("Using monte-carlo strategy...\n");
         return getMCTSMove(state, turnTimeMillis, false);
     }
@@ -96,6 +96,50 @@ Edge getDeepBox1Move(UnscoredState * state, int turnTimeMillis) {
     }
 }
 
+Edge getDeepBox2Move(UnscoredState * state, int turnTimeMillis) {
+    SCGraph graph;
+    unscoredStateToSCGraph(&graph, state);
+
+    Edge urgentMoves[NUM_EDGES];
+    short numUrgentMoves = getGraphsPotentialMoves(&graph, urgentMoves);
+
+    log_debug("%d graphs moves found: ", numUrgentMoves);
+    for (short i=0; i < numUrgentMoves; i++)
+        log_debug("%d ", urgentMoves[i]);
+
+    log_debug("\n");
+
+    Edge moveChoice = NO_EDGE;
+    if (numUrgentMoves == 1) {
+        log_log("getDeepBox2Move: Returning urgent move.\n");
+        moveChoice = urgentMoves[0];
+    }
+    else {
+        short numEdgesLeft = getNumFreeEdges(state);
+
+        if (numEdgesLeft <= 19) {
+            log_log("getDeepBox2Move: Using alpha beta.\n");
+            moveChoice = getABMove(state, 19, false);
+        }
+        else if (numEdgesLeft <= 50) {
+            log_log("getDeepBox2Move: Using monte carlo.\n");
+            moveChoice = getMCTSMove(state, turnTimeMillis, false);
+        }
+        else {
+            log_log("getDeepBox2Move: Using getMoveAlways4Never3.\n");
+            moveChoice = getMoveAlways4Never3(state);
+        }
+    }
+
+    // The graph representation knows nothing about the distinctions of corner edges.
+    if (isEdgeTaken(state, moveChoice)) {
+        log_log("getGraphsMove: Converting taken corner edge %d to %d.\n", moveChoice, getCorrespondingCornerEdge(moveChoice));
+        moveChoice = getCorrespondingCornerEdge(moveChoice);
+    }
+
+    return moveChoice;
+}
+
 Edge getGraphsMove(UnscoredState * state) {
     SCGraph graph;
     unscoredStateToSCGraph(&graph, state);
@@ -103,16 +147,6 @@ Edge getGraphsMove(UnscoredState * state) {
     Edge potentialMoves[NUM_EDGES];
     short numPotentialMoves = getGraphsPotentialMoves(&graph, potentialMoves);
 
-    // In the graph representation, corner edges are the same.
-    // This means that a 'potential move' returned might actually be a corner edge that is already taken.
-    // In this scenario it must be converted to its equivalent corner edge.
-    for(short i=0; i < numPotentialMoves; i++) {
-        Edge move = potentialMoves[i];
-        if (isEdgeTaken(state, move)) {
-            log_log("getGraphsMove: Converting taken corner edge %d to %d.\n", move, getCorrespondingCornerEdge(move));
-            potentialMoves[i] = getCorrespondingCornerEdge(move);
-        }
-    }
 
     log_log("getGraphsMove: getGraphsPotentialMoves found %d moves. Choosing the first move which is %d.\n", numPotentialMoves, potentialMoves[0]);
 
@@ -152,6 +186,9 @@ Edge chooseMove(UnscoredState state, Strategy strategy, int turnTimeMillis) {
             break;
         case DEEPBOX1:
             moveChoice = getDeepBox1Move(&state, turnTimeMillis);
+            break;
+        case DEEPBOX2:
+            moveChoice = getDeepBox2Move(&state, turnTimeMillis);
             break;
     }
 

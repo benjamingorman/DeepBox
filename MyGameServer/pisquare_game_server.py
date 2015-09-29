@@ -245,8 +245,6 @@ def playMatch(gui, rounds, player1name,player2name,player1,player2):
 
     if not draw:
         print("Winner: " + winnername)
-        if const.GUI_ENABLED:
-            gui.finalScore(winnername,max(scorePlayer1,scorePlayer2),min(scorePlayer1,scorePlayer2))
 
 # Main
 

@@ -14,21 +14,26 @@ static const short SUB_GRAPH_MAX = 20; // the largest number of sub graphs a sin
 static const short URGENT_MOVE_MAX = 2; // the maximum number of urgent moves that can be returned
 static const short NEIGHBOUR_MAX = 24; // the maximum number of neighbours a node can have (the imaginary node can have up to 24) (the imaginary node can have up to 24)
 
-static void newAdjMat(SCGraph * graph);
-static void freeAdjMat(SCGraph * graph);
-static void copySCGraph(SCGraph * destGraph, const SCGraph * srcGraph);
+void newAdjLists(SCGraph * graph);
+void freeAdjLists(SCGraph * graph);
+
+static AdjListNode * addAdjListNode(AdjList * list, short dest);
+static void removeAdjListNode(AdjList * list, short dest);
+
+static void addConnection(SCGraph * graph, short node1, short node2);
+static void removeConnection(SCGraph * graph, short node1, short node2);
+static short getNumConnectionsBetween(const SCGraph * graph, short node1, short node2);
+
+void copySCGraph(SCGraph * destGraph, const SCGraph * srcGraph);
 static void printSCGraph(const SCGraph * graph);
 static short getAllArcs(const SCGraph * graph, short * nodeBuf1, short * nodeBuf2);
 
-static void setNodesConnectedState(SCGraph * graph, short node1, short node2, bool connectedState);
-static void setNodesConnected(SCGraph * graph, short node1, short node2);
-static void setNodesDisconnected(SCGraph * graph, short node1, short node2);
 static bool areNodesConnected(const SCGraph * graph, short node1, short node2);
 static short getConnectedNodes(const SCGraph * graph, short node, short * nodeBuffer);
 static short getNodeValency(const SCGraph * graph, short node);
 
 static short getUrgentMoves(const SCGraph * graph, Edge * potentialMoves);
-static short getNonUrgentMoves(const SCGraph * graph, Edge * potentialMoves);
+static short getNonIsomorphicMoves(const SCGraph * graph, Edge * potentialMoves);
 static short getSubGraphs(const SCGraph * superGraph, SCGraph *subGraphBuffer);
 
 void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state) {
@@ -46,8 +51,8 @@ void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state) {
     graph->numArcs = 0;
     
     // Now we know how many nodes there are we can allocate space for the adjacency matrix.
-    newAdjMat(graph);
-    log_debug("Initialized adjacency matrix.\n");
+    newAdjLists(graph);
+    log_debug("Initialized adjacency lists.\n");
 
     // Now populate nodeToBox with the correct values.
     Box boxToNode[NUM_BOXES]; // temporary - helps with building adjacency matrix
@@ -60,11 +65,10 @@ void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state) {
     }
     log_debug("Initialized nodeToBox.\n");
 
-    // Now fill in the adjacency matrix
+    // Now fill in the adjacency lists
     for(Edge e=0; e < NUM_EDGES; e++) {
         if(!isEdgeTaken(state, e)) {
             log_debug("Edge %d is not taken.\n", e);
-            graph->numArcs++;
 
             const Box * edgeBoxes = getEdgeBoxes(e);
             short b1 = edgeBoxes[0];
@@ -72,14 +76,15 @@ void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state) {
 
             log_debug("b1: %d, b2: %d\n", b1, b2);
 
+            // Remember 0 can have 2 connections to corner boxes
             if (b1 == NO_BOX) {
-                setNodesConnected(graph, 0, boxToNode[b2]);
+                addConnection(graph, 0, boxToNode[b2]);
             }
             else if (b2 == NO_BOX) {
-                setNodesConnected(graph, boxToNode[b1], 0);
+                addConnection(graph, boxToNode[b1], 0);
             }
             else {
-                setNodesConnected(graph, boxToNode[b1], boxToNode[b2]);
+                addConnection(graph, boxToNode[b1], boxToNode[b2]);
             }
         }
         else {
@@ -88,13 +93,21 @@ void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state) {
     }
 }
 
-BlissGraph * scGraphToBlissGraph(const SCGraph * scGraph) {
-    BlissGraph * bGraph = bliss_new(scGraph->numNodes);
+static BlissGraph * scGraphToBlissGraph(const SCGraph * scGraph) {
+    BlissGraph * bGraph = bliss_new(0);
+
+    // Color 0 differently to the other nodes since it's special.
+    static unsigned int zeroColour = 0;
+    static unsigned int othersColour = 1;
+
+    bliss_add_vertex(bGraph, zeroColour);
+    for (short i=1; i < scGraph->numNodes; i++) {
+        bliss_add_vertex(bGraph, othersColour);
+    }
 
     short allArcsBuf1[scGraph->numArcs];
     short allArcsBuf2[scGraph->numArcs];
     short numArcs = getAllArcs(scGraph, allArcsBuf1, allArcsBuf2);
-    assert(numArcs == scGraph->numArcs);
 
     for (short i=0; i < numArcs; i++) {
         bliss_add_edge(bGraph, allArcsBuf1[i], allArcsBuf2[i]);
@@ -103,113 +116,163 @@ BlissGraph * scGraphToBlissGraph(const SCGraph * scGraph) {
     return bGraph;
 }
 
-static void newAdjMat(SCGraph * graph) {
-    // First malloc some memory for the adjMat
-    size_t numBytes = sizeof(char) * pow(graph->numNodes, 2);
-    graph->adjMat = (char *)malloc(numBytes);
+void newAdjLists(SCGraph * graph) {
+    graph->adjLists = (AdjList *)malloc(graph->numNodes * sizeof(AdjList));
 
-    // Then set every element to 0
-    memset(graph->adjMat, 0, numBytes);
+    for(short i=0; i < graph->numNodes; i++) {
+        graph->adjLists[i].length = 0;
+        graph->adjLists[i].head = NULL;
+    }
 }
 
-static void freeAdjMat(SCGraph * graph) {
-    free(graph->adjMat);
+void freeAdjLists(SCGraph * graph) {
+    for(short i=0; i < graph->numNodes; i++) {
+        AdjList * al = &(graph->adjLists[i]);
+
+        AdjListNode * node = al->head;
+        while (node != NULL) {
+            AdjListNode * nextNode = node->next;
+            free(node);
+            node = nextNode;
+        }
+    }
+
+    free(graph->adjLists);
 }
 
-static void copySCGraph(SCGraph * destGraph, const SCGraph * srcGraph) {
-    // Will also malloc a new adjMat in destGraph, so careful for memory leaks.
+void copySCGraph(SCGraph * destGraph, const SCGraph * srcGraph) {
+    // Will also malloc new adjLists in destGraph, so careful for memory leaks.
     
     destGraph->numNodes = srcGraph->numNodes;
-    destGraph->numArcs = srcGraph->numArcs;
+    destGraph->numArcs = 0; // will be incremented when arcs are added
 
-    newAdjMat(destGraph);
+    newAdjLists(destGraph);
 
     for (short i=0; i < srcGraph->numNodes; i++) {
         destGraph->nodeToBox[i] = srcGraph->nodeToBox[i];
     }
 
-    memcpy(destGraph->adjMat, srcGraph->adjMat, sizeof(char) * pow(srcGraph->numNodes, 2));
+    short allArcsBuf1[NUM_EDGES];
+    short allArcsBuf2[NUM_EDGES];
+    assert(getAllArcs(srcGraph, allArcsBuf1, allArcsBuf2) == srcGraph->numArcs);
+
+    for(short i=0; i < srcGraph->numArcs; i++) {
+        addConnection(destGraph, allArcsBuf1[i], allArcsBuf2[i]);
+    }
 }
 
 static void printSCGraph(const SCGraph * graph) {
     for(short i=0; i < graph->numNodes; i++) {
+        printf("%d -> ", i);
         for(short j=0; j < graph->numNodes; j++) {
-            if (areNodesConnected(graph, i, j))
-                printf("%d", 1);
-            else
-                printf("%d", 0);
+            short numConnections = getNumConnectionsBetween(graph, i, j);
 
+            for (short k=0; k < numConnections; k++) {
+                printf("%d ", j);
+            }
         }
         printf("\n");
     }
 }
 
-static bool areGraphsIsomorphic(const SCGraph * g1, const SCGraph * g2) {
-    // Implemented using lexicographical sorting of graph adjacency matrices.
-    // TODO: Why exactly does this work? Is it provable mathematically?
-    log_debug("areGraphsIsomorphic: printing g1...\n");
-    printSCGraph(g1);
+static AdjListNode * addAdjListNode(AdjList * list, short dest) {
+    AdjListNode * newNode;
 
-    log_debug("areGraphsIsomorphic: printing g2...\n");
-    printSCGraph(g2);
-    
-    if (g1->numNodes != g2->numNodes || g1->numArcs != g2->numArcs) {
-        log_debug("areGraphsIsomorphic: Returning false because difference in numNodes/numArcs.\n");
-        return false;
-    }
-    else if (getNodeValency(g1, 0) != getNodeValency(g2, 0)) { // since 0 is a special node this edge cased must be handled.
-        log_debug("areGraphsIsomorphic: Returning false because node 0 valencies are different.\n");
-        return false;
+    if (list->head == NULL) {
+        list->head = (AdjListNode *)malloc(sizeof(AdjListNode));
+        newNode = list->head;
     }
     else {
-        BlissGraph * bGraph1 = scGraphToBlissGraph(g1);
-        BlissGraph * bGraph2 = scGraphToBlissGraph(g2);
+        AdjListNode * connectedNode = list->head;
+        while(connectedNode->next != NULL) {
+            connectedNode = connectedNode->next;
+        }
 
-        const unsigned int * bGraph1CanonicalPerm = bliss_find_canonical_labeling(bGraph1, NULL, NULL, NULL);
-        BlissGraph * bGraph1Canonical = bliss_permute(bGraph1, bGraph1CanonicalPerm);
+        connectedNode->next = (AdjListNode *)malloc(sizeof(AdjListNode));
+        newNode = connectedNode->next;
+    }
 
-        const unsigned int * bGraph2CanonicalPerm = bliss_find_canonical_labeling(bGraph2, NULL, NULL, NULL);
-        BlissGraph * bGraph2Canonical = bliss_permute(bGraph2, bGraph2CanonicalPerm);
+    newNode->dest = dest;
+    newNode->next = NULL;
 
-        int comparison = bliss_cmp(bGraph1Canonical, bGraph2Canonical);
-        unsigned int bGraph1Hash = bliss_hash(bGraph1Canonical);
-        unsigned int bGraph2Hash = bliss_hash(bGraph2Canonical);
+    list->length++;
 
-        log_debug("areGraphsIsomorphic: bliss_cmp comparison is: %d. bGraph1Canonical hash is: %u, bGraph2Canonical hash is: %u.\n", comparison, bGraph1Hash, bGraph2Hash);
+    return newNode;
+}
 
-        bliss_release(bGraph1);
-        bliss_release(bGraph2);
-        bliss_release(bGraph1Canonical);
-        bliss_release(bGraph2Canonical);
+static void removeAdjListNode(AdjList * list, short dest) {
+    if (list->head == NULL)
+        return;
+    else if (list->head->dest == dest) {
+        AdjListNode * next = list->head->next;
+        free(list->head);
+        list->head = next;
+        list->length = 0;
+        return;
+    }
+    else {
+        // Try and find a node which has the target dest.
+        AdjListNode * prevNode = list->head;
+        AdjListNode * currentNode = prevNode->next;
+        
+        while(currentNode->dest != dest) {
+            prevNode = currentNode;
+            currentNode = currentNode->next;
 
-        return comparison == 0;
+            // There isn't one so return
+            if (currentNode == NULL)
+                return;
+        }
+
+        // Else remove the link
+        prevNode->next = currentNode->next;
+        free(currentNode); 
+        list->length--;
     }
 }
 
-static void setNodesConnectedState(SCGraph * graph, short node1, short node2, bool connectedState) {
-    short n = graph->numNodes;
-    short val;
-    if (connectedState == true)
-        val = (char)1;
-    else // not connected
-        val = (char)0;
+static void addConnection(SCGraph * graph, short node1, short node2) {
+    //log_debug("addConnection: Connecting %d and %d.\n", node1, node2);
+    AdjList * node1List = &(graph->adjLists[node1]);
+    AdjList * node2List = &(graph->adjLists[node2]);
 
-    graph->adjMat[n*node1 + node2] = val;
-    graph->adjMat[n*node2 + node1] = val;
+    addAdjListNode(node1List, node2);
+    addAdjListNode(node2List, node1);
+
+    graph->numArcs++;
 }
 
-static void setNodesConnected(SCGraph * graph, short node1, short node2) {
-    log_debug("setNodesConnected: Connecting %d and %d.\n", node1, node2);
-    setNodesConnectedState(graph, node1, node2, true);
+
+static void removeConnection(SCGraph * graph, short node1, short node2) {
+    log_debug("removeConnection: Disconnecting %d and %d.\n", node1, node2);
+    AdjList * node1List = &(graph->adjLists[node1]);
+    AdjList * node2List = &(graph->adjLists[node2]);
+
+    removeAdjListNode(node1List, node2);
+    removeAdjListNode(node2List, node1);
+
+    graph->numArcs--;
 }
 
-static void setNodesDisconnected(SCGraph * graph, short node1, short node2) {
-    setNodesConnectedState(graph, node1, node2, false);
+static short getNumConnectionsBetween(const SCGraph * graph, short node1, short node2) {
+    short numConnections = 0;
+    AdjList * node1List = &(graph->adjLists[node1]);
+
+    AdjListNode * connectedNode = node1List->head;
+    while (connectedNode != NULL) {
+        if (connectedNode->dest == node2)
+            numConnections++;
+
+        connectedNode = connectedNode->next;
+    }
+
+    //log_debug("getNumConnectionsBetween: There are %d connections between %d and %d.\n", numConnections, node1, node2);
+
+    return numConnections;
 }
 
 static bool areNodesConnected(const SCGraph * graph, short node1, short node2) {
-    short n = graph->numNodes; 
-    return graph->adjMat[n*node1 + node2] == 1;
+    return getNumConnectionsBetween(graph, node1, node2) > 0;
 }
 
 static short getConnectedNodes(const SCGraph * graph, short node, short * nodeBuffer) {
@@ -217,39 +280,28 @@ static short getConnectedNodes(const SCGraph * graph, short node, short * nodeBu
 
     short numConnectedNodes = 0;
 
-    for(short n=0; n < graph->numNodes; n++) {
-        // log_debug("getConnectedNodes: Considering node %d\n", n);
-        if(n == node) {
-            //log_debug("getConnectedNodes: It's the same as the source node, skipping...\n");
-            continue;
-        }
-        else if (areNodesConnected(graph, node, n)) {
-            //log_debug("getConnectedNodes: It's a neighbour! Adding it...\n");
-            nodeBuffer[numConnectedNodes++] = n;
-        }
+    AdjList * nodeList = &(graph->adjLists[node]);
+    AdjListNode * connectedNode = nodeList->head;
+    while(connectedNode != NULL) {
+        //log_debug("getConnectedNodes: Adding %d.\n", connectedNode->dest);
+        nodeBuffer[numConnectedNodes++] = connectedNode->dest;
+        connectedNode = connectedNode->next;
     }
 
     return numConnectedNodes;
 }
 
 static short getNodeValency(const SCGraph * graph, short node) {
-    short valency = 0;
-
-    for (short i=0; i < graph->numNodes; i++) {
-        if (areNodesConnected(graph, node, i))
-            valency++;
-    }
-
-    return valency;
+    return graph->adjLists[node].length;
 }
 
 static short findNodesWithValency(const SCGraph * graph, short valency, short * nodeBuf) {
-    // May return the imaginary node
     short numFound = 0;
 
     for (short i=1; i < graph->numNodes; i++) {
-        if (getNodeValency(graph, i) == valency)
+        if (getNodeValency(graph, i) == valency) {
             nodeBuf[numFound++] = i;
+        }
     }
 
     return numFound;
@@ -259,7 +311,7 @@ static short getAllArcs(const SCGraph * graph, short * nodeBuf1, short * nodeBuf
     // For each node pair e.g. (1,2), populate nodeBuf1 with the first element of the pair
     // and nodeBuf2 with the second element of the pair.
     // Returns the number of pairs.
-    short numEdges = 0;
+    short numArcs = 0;
     
     for (short node=0; node < graph->numNodes; node++) {
         short neighbours[NEIGHBOUR_MAX]; // 0 could be connected to many neighbours
@@ -269,20 +321,23 @@ static short getAllArcs(const SCGraph * graph, short * nodeBuf1, short * nodeBuf
             short neighbour = neighbours[i];
 
             if (neighbour > node) { // don't re-add duplicate pairs e.g. (3,4), (4,3)
-                nodeBuf1[numEdges] = node;
-                nodeBuf2[numEdges] = neighbour;
-                numEdges++;
+                nodeBuf1[numArcs] = node;
+                nodeBuf2[numArcs] = neighbour;
+                numArcs++;
             }
         }
     }
 
-    return numEdges;
+    log_debug("numArcs: %d, scGraph->numArcs: %d\n", numArcs, graph->numArcs);
+    assert(numArcs == graph->numArcs);
+
+    return numArcs;
 }
 
 static short getSubGraphs(const SCGraph * superGraph, SCGraph *subGraphBuffer) {
     // Returns the number of sub-graphs found.
     short label = 0;
-    short numAlreadyLabelled = 1; // assume 0 is labelled
+    short numAlreadyLabelled = 1; // let 0 be labelled
     BTree * alreadyLabelled = newBTree(0);
     short nodeToLabel[superGraph->numNodes];
     nodeToLabel[0] = 0; // node 0 (the imaginary node) is labelled with the unique label 0
@@ -316,7 +371,7 @@ static short getSubGraphs(const SCGraph * superGraph, SCGraph *subGraphBuffer) {
             }
         }
         else {
-            // pop a node off the stack and infect it's neighbours
+            // Pop a node off the stack
             log_debug("Stack head at %d. Popping one...\n", currentLabelStackHead);
             short node = currentLabelStack[currentLabelStackHead--];
 
@@ -359,55 +414,41 @@ static short getSubGraphs(const SCGraph * superGraph, SCGraph *subGraphBuffer) {
 
         // Iterate over all the nodes in the superGraph and partition those that are labelled with 'l'
         short subToSup[NUM_BOXES]; // the node indexed e.g. 4 in the superGraph might be indexed 1 in the subGraph. So this maps the two.
-        short supToSub[NUM_BOXES];
         subToSup[0] = 0;
-        supToSub[0] = 0;
         short subNodeCounter = 1;
         for(short superN=1; superN < superGraph->numNodes; superN++) {
             if (l == nodeToLabel[superN]) {
-                log_debug("Super node %d -> sub node %d\n", superN, subNodeCounter);
+                log_debug("Box %d -> super node %d -> sub node %d\n", superGraph->nodeToBox[superN], superN, subNodeCounter);
                 subGraph->nodeToBox[subNodeCounter] = superGraph->nodeToBox[superN];
                 subToSup[subNodeCounter] = superN;
-                supToSub[superN] = subNodeCounter;
                 subNodeCounter++;
             }
         }
 
         subGraph->numNodes = subNodeCounter;
 
-        newAdjMat(subGraph);
+        newAdjLists(subGraph);
 
         log_debug("subGraph->numNodes = %d\n", subNodeCounter);
 
         // Now iterate over the nodes in the partition and create the arcs in the subgraph.
         log_debug("Filling in arcs...\n");
-        for(short subN=1; subN < subNodeCounter; subN++) {
-            short superN = subToSup[subN];
-            log_debug("Considering sub node %d (super node %d).\n", subN, superN);
+        for(short subN1=0; subN1 < subNodeCounter; subN1++) {
+            // initialize subN2 to subN1 so we don't re-add arcs for pairs e.g. (3,4) (4,3)
+            for (short subN2=subN1; subN2 < subNodeCounter; subN2++) {
+                short supN1 = subToSup[subN1];
+                short supN2 = subToSup[subN2];
 
-            // Get all the relevant arcs
-            for (short i=0; i < superGraph->numNodes; i++) {
-                if (i == 0 || nodeToLabel[i] == l) {
-
-                    // Nodes that are already connected don't need to be connected for a second time.
-                    if (areNodesConnected(superGraph, superN, i) &&
-                            !areNodesConnected(subGraph, subN, supToSub[i])) {
-                        log_debug("%d and %d are connected in superGraph!\n", superN, i);
-                        log_debug("Connecting %d and %d in subGraph.\n", subN, supToSub[i]);
-                        subGraph->numArcs++;
-                        setNodesConnected(subGraph, subN, supToSub[i]);
-                    }
+                log_debug("Considering sub nodes %d and %d. (super nodes %d and %d).\n", subN1, subN2, supN1, supN2);
+                short numConnections = getNumConnectionsBetween(superGraph, supN1, supN2);
+                log_debug("They are connected %d times.\n", numConnections);
+                for (short i=0; i < numConnections; i++) {
+                    addConnection(subGraph, subN1, subN2);
                 }
             }
-        }
-        
-        log_debug("Printing sub-graph adjMat!\n");
-        printSCGraph(subGraph);
+        } // end iterating subN1
+    } // end iterating labels
 
-        log_debug("\n");
-    }
-
-    //log_debug("getSubGraphs: Completed successfully!\n");
     return labelMax;
 }
 
@@ -442,6 +483,7 @@ short getUrgentMoves(const SCGraph * graph, Edge * movesBuf) {
     short v1Nodes[NUM_BOXES];
     short numV1Nodes = findNodesWithValency(graph, 1, v1Nodes);
 
+    //printSCGraph(graph);
     log_debug("getUrgentMoves: Doing quick pass for 1-nodes connected to joints (there are %d 1-nodes).\n", numV1Nodes);
     for (short i=0; i < numV1Nodes; i++) {
         short v1Node = v1Nodes[i];
@@ -470,11 +512,27 @@ short getUrgentMoves(const SCGraph * graph, Edge * movesBuf) {
             short chainLength = graph->numNodes - 1;
             log_debug("getUrgentMoves: Closed chain detected of length %d.\n", chainLength);
 
-            if (chainLength == 2 || chainLength == 3) {
-                // For the 3-chain, both possible moves are equal.
-                // So the below expression works fine for 2-chains and 3-chains.
+            if (chainLength == 2) {
                 foundMoves = true;
                 movesBuf[numMoves++] = boxPairToEdge(graph->nodeToBox[1], graph->nodeToBox[2]);
+            }
+            else if (chainLength == 3) {
+                /* Either move is fine but consider this:
+                     . _ .
+                     | 1 |
+                 . _ .   .
+                 | 2   3 |
+                 . _ . _ .
+
+                 Choosing nodes 1 and 2 would lead to an error because they aren't connected. But either of the other pairs are fine.
+                 */
+                short node = 1;
+                short neighbours[2];
+                getConnectedNodes(graph, node, neighbours); 
+                short neighbour = neighbours[0];
+
+                foundMoves = true;
+                movesBuf[numMoves++] = boxPairToEdge(graph->nodeToBox[node], graph->nodeToBox[neighbour]);
             }
             else if (chainLength == 4) {
                 short nodeBuffer[2];
@@ -595,6 +653,9 @@ short getUrgentMoves(const SCGraph * graph, Edge * movesBuf) {
 
                         break;
                     }
+                    else {
+                        log_debug("Hit a node with a valency other than 1. Stopping search.\n");
+                    }
                 } // end iterating joint neighbours
 
 
@@ -610,10 +671,26 @@ short getUrgentMoves(const SCGraph * graph, Edge * movesBuf) {
     return numMoves;
 }
 
-static short getNonUrgentMoves(const SCGraph * graph, Edge * movesBuf) {
+static unsigned int getGraphCanonicalHash(const SCGraph * graph) {
+    // Useful for quickly findings isormorphisms in sets of graphs.
+    
+    BlissGraph * bGraph = scGraphToBlissGraph(graph);
+
+    BlissGraph * bGraphCanonical = bliss_permute(bGraph, bliss_find_canonical_labeling(bGraph, NULL, NULL, NULL));
+
+    unsigned int hash = bliss_hash(bGraphCanonical);
+
+    bliss_release(bGraph);
+    bliss_release(bGraphCanonical);
+
+    return hash;
+}
+
+
+static short getNonIsomorphicMoves(const SCGraph * graph, Edge * movesBuf) {
     // Return all moves which don't lead to isomorphic positions.
-    log_debug("getNonUrgentMoves: Running for:\n");
-    printSCGraph(graph);
+    log_debug("getNonIsomorphicMoves: Running for:\n");
+    //printSCGraph(graph);
 
     short numMoves = 0;
 
@@ -624,45 +701,49 @@ static short getNonUrgentMoves(const SCGraph * graph, Edge * movesBuf) {
     
     // Only unique graphs will be added to this set
     SCGraph childGraphs[graph->numArcs];
+    unsigned int childGraphsHashes[graph->numArcs];
     short numChildGraphs = 0;
 
     for(short i=0; i < graph->numArcs; i++) {
         short node1 = allArcsBuf1[i];
         short node2 = allArcsBuf2[i];
-        log_debug("getNonUrgentMoves: Considering the arc between nodes %d and %d.\n", node1, node2);
+        //log_debug("getNonIsomorphicMoves: Considering the arc between nodes %d and %d.\n", node1, node2);
 
         SCGraph childGraph;
         copySCGraph(&childGraph, graph);
-        
-        setNodesDisconnected(&childGraph, node1, node2);
-        childGraph.numArcs--;
-        printSCGraph(&childGraph);
+        removeConnection(&childGraph, node1, node2);
+
+        unsigned int childGraphHash = getGraphCanonicalHash(&childGraph);
+
+        //log_debug("getNonIsomorphicMoves: childGraphHash = %u\n", childGraphHash);
 
         // Iterate through already-seen graphs
-        bool isUnseen = true;
+        bool isomorphic = false;
         for (short j=0; j < numChildGraphs; j++) {
-            if(areGraphsIsomorphic(&childGraph, &childGraphs[j])) {
-                isUnseen = false;
+            SCGraph * otherGraph = &childGraphs[j];
+
+            if (childGraph.numNodes == otherGraph->numNodes &&
+                    childGraph.numArcs == otherGraph->numArcs &&
+                    childGraphHash == childGraphsHashes[j]) {
+                log_debug("getNonIsomorphicMoves: Graphs are isomorphic!\n");
+                isomorphic = true;
                 break;
             }
         }
 
-        if (isUnseen) {
+        if (!isomorphic) {
             Edge move = boxPairToEdge(graph->nodeToBox[node1], graph->nodeToBox[node2]);
             movesBuf[numMoves++] = move;
+            childGraphsHashes[numChildGraphs] = childGraphHash;
             childGraphs[numChildGraphs++] = childGraph;
 
-            log_debug("getNonUrgentMoves: Move %d leads to an unseen position. Adding it.\n", move);
+            //log_debug("getNonIsomorphicMoves: Move %d leads to an unseen position. Adding it.\n", move);
         }
-        else {
-            log_debug("getNonUrgentMoves: The move leads to an already seen position.\n");
-        }
-
     }
 
     // Free adjacency matrices for all created child graphs
     for(short i=0; i < numChildGraphs; i++) {
-        freeAdjMat(&childGraphs[i]);
+        freeAdjLists(&childGraphs[i]);
     }
 
     assert(numMoves != 0);
@@ -673,24 +754,29 @@ short getGraphsPotentialMoves(const SCGraph * graph, Edge * potentialMoves) {
     SCGraph subGraphs[SUB_GRAPH_MAX];
     short numSubGraphs = getSubGraphs(graph, subGraphs);
     log_debug("getGraphsPotentialMoves: %d subgraphs found for given graph.\n", numSubGraphs);
+    short numMoves = 0;
 
+    bool foundUrgentMoves = false;
     // First check for urgent moves. If a subgraph has some, return them.
     for(short i=0; i < numSubGraphs; i++) {
-        short numUrgentMoves = getUrgentMoves(&subGraphs[i], potentialMoves);
+        numMoves = getUrgentMoves(&subGraphs[i], potentialMoves);
 
-        if (numUrgentMoves > 0) {
-            log_debug("getGraphsPotentialMoves: Returning %d urgent moves.\n", numUrgentMoves);
-            return numUrgentMoves;
+        if (numMoves > 0) {
+            foundUrgentMoves = true;
+            break;
         }
     }
 
-    // Else return all non urgent moves
-    short numMoves = 0;
-    for(short i=0; i < numSubGraphs; i++) {
-        numMoves += getNonUrgentMoves(&subGraphs[i], &(potentialMoves[numMoves]));
+    if (!foundUrgentMoves) {
+        // Else return all non urgent moves
+        for(short i=0; i < numSubGraphs; i++) {
+            numMoves += getNonIsomorphicMoves(&subGraphs[i], &(potentialMoves[numMoves]));
+            freeAdjLists(&subGraphs[i]);
+        }
     }
 
-    log_debug("getGraphsPotentialMoves: Returning %d non urgent moves. (%G%% of possible options.\n", numMoves, 100.0 * (double)numMoves / (double)graph->numArcs);
+    log_debug("getGraphsPotentialMoves: Returning %d moves. urgent=%d\n", numMoves, foundUrgentMoves);
+
     return numMoves;
 }
 
@@ -713,7 +799,7 @@ void runGraphsTests() {
     log_debug("unscoredStateToSCGraph should behave correctly.\n");
     unscoredStateToSCGraph(&graph, &state);
 
-    printSCGraph(&graph);
+    //printSCGraph(&graph);
 
     log_debug("It should have the right number of nodes.\n");
     assert(graph.numNodes == 28 + 1); // remember that NO_BOX is registered as a node
@@ -727,14 +813,10 @@ void runGraphsTests() {
         assert(graph.nodeToBox[i] == i-1);
     }
 
-    log_debug("8 nodes should have valency 3, 20 should have valency 4.\n");
-    short numNodesWithValency3 = findNodesWithValency(&graph, 3, nodeBuffer);
-    assert(numNodesWithValency3 == 8);
-
+    log_debug("All nodes should have valency 4.\n");
     short numNodesWithValency4 = findNodesWithValency(&graph, 4, nodeBuffer);
-    assert(numNodesWithValency4 == 20);
-
-    freeAdjMat(&graph);
+    log_debug("Found %d nodes with valency 4...\n", numNodesWithValency4);
+    assert(numNodesWithValency4 == 28);
 
     log_log("Full 28-node graph passed!\n\n");
 
@@ -746,9 +828,14 @@ void runGraphsTests() {
     assert(newGraph.numArcs == graph.numArcs);
     for(short i=0; i < graph.numNodes; i++) {
         assert(newGraph.nodeToBox[i] == graph.nodeToBox[i]);
+
+        for(short j=0; j < graph.numNodes; j++) {
+            log_debug("Testing i=%d, j=%d\n", i, j);
+            assert(getNumConnectionsBetween(&graph, i, j) == getNumConnectionsBetween(&newGraph, i, j));
+        }
     }
-    assert(memcmp(newGraph.adjMat, graph.adjMat, pow(graph.numNodes, 2)) == 0);
-    freeAdjMat(&newGraph);
+    freeAdjLists(&newGraph);
+    freeAdjLists(&graph);
 
     // Graph with only a 2x2 square left
     log_log("Testing with a board with only a 2x2 square left...\n");
@@ -776,7 +863,7 @@ void runGraphsTests() {
     assert(areNodesConnected(&graph,1,3));
     assert(areNodesConnected(&graph,1,4) == false);
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("4 boxes left graph passed!\n\n");
 
@@ -790,9 +877,9 @@ void runGraphsTests() {
     graph.numNodes = 2;
     graph.numArcs = 1;
 
-    newAdjMat(&graph);
+    newAdjLists(&graph);
     graph.nodeToBox[1] = 1;
-    setNodesConnected(&graph, 0, 1);
+    addConnection(&graph, 0, 1);
 
     printSCGraph(&graph);
 
@@ -801,9 +888,32 @@ void runGraphsTests() {
     assert(numPotentialMoves == 1);
     assert(potentialMoves[0] == boxPairToEdge(NO_BOX,1));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("Isolated node graph passed!\n\n");
+
+    /* Graph with isolated 2-node as a subgraph:
+    */
+
+    log_log("Testing with isolated 2-node subgraph...\n");
+    stringToUnscoredState(&state, "000000000000000000000000000000000000000000000000000000000001000100000000");
+    unscoredStateToSCGraph(&graph, &state);
+    printSCGraph(&graph);
+
+    numSubGraphs = getSubGraphs(&graph, subGraphs);
+    assert(numSubGraphs == 2);
+
+    log_debug("getUrgentMoves should not return anything for the subgraph...\n");
+    numPotentialMoves = getUrgentMoves(&subGraphs[1], potentialMoves);
+    assert(numPotentialMoves == 0);
+
+    log_debug("getNonIsomorphicMoves should return one move for the subgraph...\n");
+    numPotentialMoves = getNonIsomorphicMoves(&subGraphs[1], potentialMoves);
+    assert(numPotentialMoves == 1);
+
+    freeAdjLists(&graph);
+
+    log_log("Isolated 2-node subgraph passed!\n\n");
 
     /* Graph with 2 boxes connecting to 0:
     . _ .
@@ -815,17 +925,20 @@ void runGraphsTests() {
 
     log_log("Testing with 2 box graph where both connect to 0...\n");
     graph.numNodes = 3;
-    graph.numArcs = 3;
+    graph.numArcs = 0;
 
-    newAdjMat(&graph);
+    newAdjLists(&graph);
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
     graph.nodeToBox[2] = 2;
-    setNodesConnected(&graph, 1, 0);
-    setNodesConnected(&graph, 1, 2);
-    setNodesConnected(&graph, 2, 0);
+    addConnection(&graph, 1, 0);
+    addConnection(&graph, 1, 2);
+    addConnection(&graph, 2, 0);
 
     printSCGraph(&graph);
+
+    log_debug("addConnection should correctly increase the number of arcs.\n");
+    assert(graph.numArcs == 3);
 
     log_debug("getUrgentMoves should not return any moves.\n");
     numPotentialMoves = getUrgentMoves(&graph, potentialMoves);
@@ -835,22 +948,27 @@ void runGraphsTests() {
     SCGraph childGraph;
     copySCGraph(&childGraph, &graph);
 
+    log_debug("Before removing connection:\n");
+    printSCGraph(&childGraph);
     assert(areNodesConnected(&childGraph, 1, 0));
     assert(areNodesConnected(&childGraph, 1, 2));
     assert(areNodesConnected(&childGraph, 2, 0));
     
-    setNodesDisconnected(&childGraph, 1, 0);
+    removeConnection(&childGraph, 1, 0);
+    log_debug("After removing connection:\n");
+    printSCGraph(&childGraph);
+
     assert(areNodesConnected(&childGraph, 1, 0) == false);
     assert(areNodesConnected(&childGraph, 1, 2));
     assert(areNodesConnected(&childGraph, 2, 0));
 
-    freeAdjMat(&childGraph);
+    freeAdjLists(&childGraph);
 
-    log_debug("getNonUrgentMoves should return the 2 sensible moves.\n");
-    numPotentialMoves = getNonUrgentMoves(&graph, potentialMoves);
+    log_debug("getNonIsomorphicMoves should return the 2 sensible moves.\n");
+    numPotentialMoves = getNonIsomorphicMoves(&graph, potentialMoves);
     assert(numPotentialMoves == 2);
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("2 box graph where both connect to 0 passed!\n\n");
     
@@ -861,16 +979,16 @@ void runGraphsTests() {
     */
     log_log("Testing with a 2-chain graph...\n");
     graph.numNodes = 3;
-    graph.numArcs = 1;
+    graph.numArcs = 0;
 
-    newAdjMat(&graph);
-    setNodesConnected(&graph, 1, 2);
+    newAdjLists(&graph);
+    addConnection(&graph, 1, 2);
 
     printSCGraph(&graph);
 
     assert(isGraphClosedChain(&graph));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("2-chain graph passed!\n\n");
 
@@ -881,11 +999,11 @@ void runGraphsTests() {
     */
     log_log("Testing with an open 2-chain graph...\n");
     graph.numNodes = 3;
-    graph.numArcs = 2;
+    graph.numArcs = 0;
 
-    newAdjMat(&graph);
-    setNodesConnected(&graph, 1, 2);
-    setNodesConnected(&graph, 2, 0);
+    newAdjLists(&graph);
+    addConnection(&graph, 1, 2);
+    addConnection(&graph, 2, 0);
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
     graph.nodeToBox[2] = 2;
@@ -905,7 +1023,7 @@ void runGraphsTests() {
     assert((potentialMoves[0] == move1 && potentialMoves[1] == move2) ||
            (potentialMoves[1] == move1 && potentialMoves[0] == move2));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("Open 2-chain graph passed!\n\n");
 
@@ -916,17 +1034,17 @@ void runGraphsTests() {
     */
     log_log("Testing with 4-chain graph...\n");
     graph.numNodes = 5;
-    graph.numArcs = 3;
+    graph.numArcs = 0;
 
-    newAdjMat(&graph);
+    newAdjLists(&graph);
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
     graph.nodeToBox[2] = 2;
     graph.nodeToBox[3] = 3;
     graph.nodeToBox[4] = 4;
-    setNodesConnected(&graph, 1, 2);
-    setNodesConnected(&graph, 2, 3);
-    setNodesConnected(&graph, 3, 4);
+    addConnection(&graph, 1, 2);
+    addConnection(&graph, 2, 3);
+    addConnection(&graph, 3, 4);
 
     printSCGraph(&graph);
 
@@ -943,7 +1061,7 @@ void runGraphsTests() {
     assert((potentialMoves[0] == move1 && potentialMoves[1] == move2) ||
            (potentialMoves[1] == move1 && potentialMoves[0] == move2));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("4-chain graph passed!\n\n");
 
@@ -954,18 +1072,18 @@ void runGraphsTests() {
     */
     log_log("Testing with an open 4-chain graph...\n");
     graph.numNodes = 5;
-    graph.numArcs = 4;
+    graph.numArcs = 0;
 
-    newAdjMat(&graph);
+    newAdjLists(&graph);
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
     graph.nodeToBox[2] = 2;
     graph.nodeToBox[3] = 3;
     graph.nodeToBox[4] = 4;
-    setNodesConnected(&graph, 1, 2);
-    setNodesConnected(&graph, 2, 3);
-    setNodesConnected(&graph, 3, 4);
-    setNodesConnected(&graph, 4, 0);
+    addConnection(&graph, 1, 2);
+    addConnection(&graph, 2, 3);
+    addConnection(&graph, 3, 4);
+    addConnection(&graph, 4, 0);
 
     printSCGraph(&graph);
 
@@ -978,7 +1096,7 @@ void runGraphsTests() {
 
     assert(potentialMoves[0] == boxPairToEdge(1,2));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("Open 4-chain graph passed!\n\n");
 
@@ -989,19 +1107,19 @@ void runGraphsTests() {
     */
     log_log("Testing with 5-chain graph...\n");
     graph.numNodes = 6;
-    graph.numArcs = 4;
+    graph.numArcs = 0;
 
-    newAdjMat(&graph);
+    newAdjLists(&graph);
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
     graph.nodeToBox[2] = 2;
     graph.nodeToBox[3] = 3;
     graph.nodeToBox[4] = 4;
     graph.nodeToBox[5] = 5;
-    setNodesConnected(&graph, 1, 2);
-    setNodesConnected(&graph, 2, 3);
-    setNodesConnected(&graph, 3, 4);
-    setNodesConnected(&graph, 4, 5);
+    addConnection(&graph, 1, 2);
+    addConnection(&graph, 2, 3);
+    addConnection(&graph, 3, 4);
+    addConnection(&graph, 4, 5);
 
     printSCGraph(&graph);
 
@@ -1014,7 +1132,7 @@ void runGraphsTests() {
 
     assert(potentialMoves[0] == boxPairToEdge(1,2));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("5-chain graph passed!\n\n");
 
@@ -1028,9 +1146,9 @@ void runGraphsTests() {
     log_log("Testing with a trivial 2x3 graph...\n");
 
     graph.numNodes = 7;
-    graph.numArcs = 4;
+    graph.numArcs = 0;
     
-    newAdjMat(&graph);
+    newAdjLists(&graph);
 
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
@@ -1041,12 +1159,12 @@ void runGraphsTests() {
     graph.nodeToBox[6] = 6;
 
     // Group 1
-    setNodesConnected(&graph, 1, 4);
-    setNodesConnected(&graph, 4, 5);
-    setNodesConnected(&graph, 5, 6);
+    addConnection(&graph, 1, 4);
+    addConnection(&graph, 4, 5);
+    addConnection(&graph, 5, 6);
 
     // Group 2
-    setNodesConnected(&graph, 2, 3);
+    addConnection(&graph, 2, 3);
 
     printSCGraph(&graph);
 
@@ -1067,7 +1185,7 @@ void runGraphsTests() {
     assert(subGraphs[1].numNodes == 3);
     assert(subGraphs[1].numArcs == 1);
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
 
     log_log("2x3 graph passed!\n\n");
 
@@ -1083,9 +1201,9 @@ void runGraphsTests() {
     log_log("Testing with a more complex 3x3 graph.\n");
 
     graph.numNodes = 10;
-    graph.numArcs = 8;
+    graph.numArcs = 0;
 
-    newAdjMat(&graph);
+    newAdjLists(&graph);
 
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
@@ -1098,14 +1216,14 @@ void runGraphsTests() {
     graph.nodeToBox[8] = 8;
     graph.nodeToBox[9] = 9;
     
-    setNodesConnected(&graph, 0, 2);
-    setNodesConnected(&graph, 1, 2);
-    setNodesConnected(&graph, 1, 4);
-    setNodesConnected(&graph, 4, 7);
-    setNodesConnected(&graph, 7, 8);
-    setNodesConnected(&graph, 8, 9);
-    setNodesConnected(&graph, 3, 0);
-    setNodesConnected(&graph, 5, 6);
+    addConnection(&graph, 0, 2);
+    addConnection(&graph, 1, 2);
+    addConnection(&graph, 1, 4);
+    addConnection(&graph, 4, 7);
+    addConnection(&graph, 7, 8);
+    addConnection(&graph, 8, 9);
+    addConnection(&graph, 3, 0);
+    addConnection(&graph, 5, 6);
 
     printSCGraph(&graph);
 
@@ -1142,7 +1260,7 @@ void runGraphsTests() {
     assert(numPotentialMoves == 1);
     assert(potentialMoves[0] == boxPairToEdge(5,6));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
     log_log("3x3 graph passed!\n\n");
 
     /* Complex 28 box position:
@@ -1269,8 +1387,8 @@ void runGraphsTests() {
     numPotentialMoves = getUrgentMoves(&subGraphs[2], potentialMoves);
     assert(numPotentialMoves == 0);
 
-    log_debug("getNonUrgentMoves should return 1 move since all others are isomorphic.\n");
-    numPotentialMoves = getNonUrgentMoves(&subGraphs[2], potentialMoves);
+    log_debug("getNonIsomorphicMoves should return 1 move since all others are isomorphic.\n");
+    numPotentialMoves = getNonIsomorphicMoves(&subGraphs[2], potentialMoves);
     assert(numPotentialMoves == 1);
 
     // Subgraph 4
@@ -1346,7 +1464,7 @@ void runGraphsTests() {
     assert((potentialMoves[0] == move1 && potentialMoves[1] == move2) ||
            (potentialMoves[1] == move1 && potentialMoves[0] == move2));
 
-    freeAdjMat(&graph);
+    freeAdjLists(&graph);
     log_log("Complex 28 box graph passed!\n\n");
 
     log_log("GRAPHS TESTS COMPLETED\n\n");

@@ -17,11 +17,11 @@
 #include <jansson.h>
 #include "game_board.h"
 #include "player_clientside.h"
+#include "graphs.h"
 #include "player_strategy.h"
 #include "mcts.h"
 #include "alphabeta.h"
 #include "util.h"
-#include "graphs.h"
 
 #define ACKNOWLEDGED "ACK"
 #define BUFSIZE 1025
@@ -149,8 +149,10 @@ int main(int argc, char ** argv) {
                     strategy = GRAPHS;
                 else if(strcmp("deepbox1", strategyName) == 0)
                     strategy = DEEPBOX1;
+                else if(strcmp("deepbox2", strategyName) == 0)
+                    strategy = DEEPBOX2;
                 else
-                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta, graphs, deepbox1}.\n", strategyName);
+                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta, graphs, deepbox1, deepbox2}.\n", strategyName);
                 break;
             case 'i':
                 turnTimeMillis = atoi(optarg);
@@ -249,6 +251,8 @@ int main(int argc, char ** argv) {
     bool game_over = false;
     while(!game_over) {
         bzero(recv_buf, sizeof(char)*BUFSIZE);
+        bzero(cmd_buf, sizeof(char)*100);
+        bzero(data_buf, sizeof(char)*BUFSIZE);
 
         log_debug("Waiting for message from server...\n");
         n = read(sockfd, recv_buf, BUFSIZE);

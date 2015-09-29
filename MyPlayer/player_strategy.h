@@ -8,6 +8,7 @@ typedef enum {
     ALPHA_BETA,
     GRAPHS,
     DEEPBOX1,
+    DEEPBOX2
 } Strategy;
 
 Edge getRandomMove(UnscoredState *);

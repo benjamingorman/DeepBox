@@ -5,6 +5,7 @@
 #include "game_board.h"
 #include "util.h"
 #include "alphabeta.h"
+#include "graphs.h"
 
 static const short ALPHA_MIN = -100;
 static const short BETA_MAX = 100;
@@ -102,6 +103,7 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
     log_debug("doAlphaBeta called for node at %p with move %d and depth %d\n", (void *)node, node->move, depth);
     *nodesVisitedCount += 1;
 
+    /*
     // TODO: Clean this up
     // Sort the potential moves in order with box completing moves first.
     // Filter out corresponding corner pairs since only one needs to be visited.
@@ -145,6 +147,12 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
 
         numPotentialMoves = numBoxCompletingMoves + numNonBoxCompletingMoves;
     }
+    */
+
+    Edge potentialMoves[NUM_EDGES];
+    SCGraph graph;
+    unscoredStateToSCGraph(&graph, state);
+    short numPotentialMoves = getGraphsPotentialMoves(&graph, potentialMoves);
 
     if (numPotentialMoves == 0 || depth == 0) { // TODO: add extra heuristics for when depth is 0
         log_debug("Node is terminal or depth is 0...\n");
@@ -218,17 +226,20 @@ Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
     // It would also make things a little bit more complicated during the actual algorithm.
     
     ABNode * child;
-    Edge bestMove;
+    Edge bestMove = NO_EDGE;
 
     child = rootNode->child;
     do {
         if (child->value == v) {
             bestMove = child->move;
+            log_log("getABMove: best move is %d\n", bestMove);
             break;
         }
     } while ((child = child->sibling) != NULL);
 
-    log_log("getABMove: best move is %d\n", bestMove);
+    if (bestMove == NO_EDGE)
+        log_error("[ERROR] getABMove: No move found.\n");
+
 
     /*
     if (saveJSON) {

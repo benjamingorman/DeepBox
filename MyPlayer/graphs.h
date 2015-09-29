@@ -1,6 +1,16 @@
 #ifndef GRAPHS_H
 #define GRAPHS_H
 
+typedef struct AdjListNode {
+    short dest;
+    struct AdjListNode * next;
+} AdjListNode;
+
+typedef struct AdjList {
+    short length;
+    AdjListNode * head;
+} AdjList;
+
 typedef struct SCGraph { 
     short numNodes;
     short numArcs;
@@ -9,12 +19,18 @@ typedef struct SCGraph {
     // So this table maps them to the index of their respective box
     short nodeToBox[NUM_BOXES];
 
-    // Heap allocated on initialization to save memory. Size is numNodes x numNodes
-    // Keep it as a contiguous array for memory efficiency.
-    char *adjMat;
+    // Edges are stored in these lists
+    // e.g.
+    // 0 -> 1, 2
+    // 1 -> 0
+    // 2 -> 0
+    AdjList * adjLists;
 } SCGraph;
 
 void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state);
+void newAdjLists(SCGraph * graph);
+void freeAdjLists(SCGraph * graph);
+void copySCGraph(SCGraph * destGraph, const SCGraph * srcGraph);
 short getGraphsPotentialMoves(const SCGraph * graph, Edge * potentialMoves);
 void runGraphsTests();
 

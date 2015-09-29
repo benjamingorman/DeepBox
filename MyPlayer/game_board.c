@@ -275,7 +275,7 @@ Edge boxPairToEdge(Box b1, Box b2) {
             return e;
     }
 
-    log_error("[ERROR] boxPairToEdge: No common edge found for boxes %d and %d!\n", b1, b2);
+    log_log("[ERROR] boxPairToEdge: No common edge found for boxes %d and %d!\n", b1, b2);
     return NO_EDGE;
 }
 
