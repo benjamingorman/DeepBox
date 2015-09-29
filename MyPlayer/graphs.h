@@ -15,6 +15,7 @@ typedef struct SCGraph {
 } SCGraph;
 
 void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state);
+short getGraphsPotentialMoves(const SCGraph * graph, Edge * potentialMoves);
 void runGraphsTests();
 
 #endif

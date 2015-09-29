@@ -15,9 +15,9 @@
 // #define NUM_BOXES 9
 // #define NUM_EDGES 24
 
-#define NO_BOX -1
-#define NO_EDGE -1
-#define NO_PLAYER -1
+#define NO_BOX 100
+#define NO_EDGE 100
+#define NO_PLAYER 100
 
 typedef short Edge;
 typedef short Box;

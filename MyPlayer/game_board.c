@@ -270,8 +270,8 @@ Edge boxPairToEdge(Box b1, Box b2) {
         Edge e = edges[i];
 
         const Box * edgeBoxes = getEdgeBoxes(e);
-        if (edgeBoxes[0] == b1 && edgeBoxes[1] == b2 ||
-            edgeBoxes[1] == b1 && edgeBoxes[0] == b2)
+        if ((edgeBoxes[0] == b1 && edgeBoxes[1] == b2) ||
+            (edgeBoxes[1] == b1 && edgeBoxes[0] == b2))
             return e;
     }
 

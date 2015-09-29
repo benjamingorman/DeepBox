@@ -18,15 +18,15 @@ extern int LOG_LEVEL;
     do { if (LOG_LEVEL <= LOG_LEVEL_ERROR) fprintf(stderr, __VA_ARGS__); } while (0)
 
 typedef struct BTree {
-    int value;
+    unsigned int value;
     struct BTree * left;
     struct BTree * right;
 } BTree;
 
-BTree * newBTree(int value);
+BTree * newBTree(unsigned int value);
 void freeBTree(BTree * bt);
-BTree * insertBTree(BTree * bt, int value);
-bool doesBTreeContain(BTree * bt, int value);
+BTree * insertBTree(BTree * bt, unsigned int value);
+bool doesBTreeContain(BTree * bt, unsigned int value);
 
 int max(int, int);
 int min(int, int);

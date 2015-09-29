@@ -5,6 +5,7 @@
 #include "game_board.h"
 #include "player_strategy.h"
 #include "mcts.h"
+#include "graphs.h"
 #include "alphabeta.h"
 #include "util.h"
 
@@ -95,35 +96,70 @@ Edge getDeepBox1Move(UnscoredState * state, int turnTimeMillis) {
     }
 }
 
+Edge getGraphsMove(UnscoredState * state) {
+    SCGraph graph;
+    unscoredStateToSCGraph(&graph, state);
+
+    Edge potentialMoves[NUM_EDGES];
+    short numPotentialMoves = getGraphsPotentialMoves(&graph, potentialMoves);
+
+    // In the graph representation, corner edges are the same.
+    // This means that a 'potential move' returned might actually be a corner edge that is already taken.
+    // In this scenario it must be converted to its equivalent corner edge.
+    for(short i=0; i < numPotentialMoves; i++) {
+        Edge move = potentialMoves[i];
+        if (isEdgeTaken(state, move)) {
+            log_log("getGraphsMove: Converting taken corner edge %d to %d.\n", move, getCorrespondingCornerEdge(move));
+            potentialMoves[i] = getCorrespondingCornerEdge(move);
+        }
+    }
+
+    log_log("getGraphsMove: getGraphsPotentialMoves found %d moves. Choosing the first move which is %d.\n", numPotentialMoves, potentialMoves[0]);
+
+    return potentialMoves[0];
+}
+
 Edge chooseMove(UnscoredState state, Strategy strategy, int turnTimeMillis) {
     assert(turnTimeMillis > 0);
 
+    Edge moveChoice = NO_EDGE;
+
+    unsigned long long startTime = getTimeMillis();
+
     switch(strategy) {
         case RANDOM_MOVE:
-            return getRandomMove(&state);
+            moveChoice =  getRandomMove(&state);
             break;
         case FIRST_BOX_COMPLETING_MOVE:
             {
             Edge move = getFirstBoxCompletingMove(&state);
 
             if (move != NO_EDGE)
-                return move;
+                moveChoice = move;
             else
-                return getRandomMove(&state);
+                moveChoice = getRandomMove(&state);
 
             }
             break;
         case MONTE_CARLO:
-            return getMCTSMove(&state, turnTimeMillis, false);
+            moveChoice = getMCTSMove(&state, turnTimeMillis, false);
             break;
         case ALPHA_BETA:
-            return getABMove(&state, 20, false);
+            moveChoice = getABMove(&state, 20, false);
+            break;
+        case GRAPHS:
+            moveChoice = getGraphsMove(&state);
+            break;
         case DEEPBOX1:
-            return getDeepBox1Move(&state, turnTimeMillis);
+            moveChoice = getDeepBox1Move(&state, turnTimeMillis);
             break;
     }
 
-    return NO_EDGE; // Avoid compiler warnings.
+    unsigned long long endTime = getTimeMillis();
+    unsigned long long timeTaken = endTime - startTime;
+    log_log("chooseMove: Chose %d. Time taken to choose: %llu.\n", moveChoice, timeTaken);
+
+    return moveChoice; // Avoid compiler warnings.
 }
 
 void runPlayerStrategyTests() {

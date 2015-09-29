@@ -145,10 +145,12 @@ int main(int argc, char ** argv) {
                     strategy = MONTE_CARLO;
                 else if(strcmp("alpha_beta", strategyName) == 0)
                     strategy = ALPHA_BETA;
+                else if(strcmp("graphs", strategyName) == 0)
+                    strategy = GRAPHS;
                 else if(strcmp("deepbox1", strategyName) == 0)
                     strategy = DEEPBOX1;
                 else
-                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta, deepbox1}.\n", strategyName);
+                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta, graphs, deepbox1}.\n", strategyName);
                 break;
             case 'i':
                 turnTimeMillis = atoi(optarg);

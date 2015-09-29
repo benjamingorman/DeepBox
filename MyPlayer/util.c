@@ -5,7 +5,7 @@
 #include <sys/time.h>
 #include "util.h"
 
-BTree * newBTree(int value) {
+BTree * newBTree(unsigned int value) {
     BTree * bt = (BTree *)malloc(sizeof(BTree));
     bt->value = value;
     bt->left = NULL;
@@ -22,7 +22,7 @@ void freeBTree(BTree * bt) {
     }
 }
 
-BTree * insertBTree(BTree * bt, int value) {
+BTree * insertBTree(BTree * bt, unsigned int value) {
     if (value == bt->value)
         return bt;
     else if (value < bt->value) {
@@ -45,7 +45,7 @@ BTree * insertBTree(BTree * bt, int value) {
     return NULL;
 }
 
-bool doesBTreeContain(BTree * bt, int value) {
+bool doesBTreeContain(BTree * bt, unsigned int value) {
     if (bt->value == value)
         return true;
     else if (bt->left != NULL && value < bt->value)
