@@ -54,15 +54,17 @@ void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state) {
     newAdjLists(graph);
     log_debug("Initialized adjacency lists.\n");
 
-    // Now populate nodeToBox with the correct values.
-    Box boxToNode[NUM_BOXES]; // temporary - helps with building adjacency matrix
-
     graph->nodeToBox[0] = NO_BOX;
-    for(short node=1; node < graph->numNodes; node++) {
-        Box b = remainingBoxes[node-1];
-        graph->nodeToBox[node] = b;
-        boxToNode[b] = node;
+    for(short i=1; i < graph->numNodes; i++) {
+        Box b = remainingBoxes[i-1];
+        graph->nodeToBox[i] = b;
+        graph->boxToNode[b] = i;
+
+        log_debug("b = %d\n", b);
+        log_debug("graph->boxToNode[%d] = %d\n", b, i);
     }
+    //graph->boxToNode[0] = 1;
+    assert(graph->boxToNode[0] == 1);
     log_debug("Initialized nodeToBox.\n");
 
     // Now fill in the adjacency lists
@@ -78,13 +80,13 @@ void unscoredStateToSCGraph(SCGraph * graph, const UnscoredState * state) {
 
             // Remember 0 can have 2 connections to corner boxes
             if (b1 == NO_BOX) {
-                addConnection(graph, 0, boxToNode[b2]);
+                addConnection(graph, 0, graph->boxToNode[b2]);
             }
             else if (b2 == NO_BOX) {
-                addConnection(graph, boxToNode[b1], 0);
+                addConnection(graph, graph->boxToNode[b1], 0);
             }
             else {
-                addConnection(graph, boxToNode[b1], boxToNode[b2]);
+                addConnection(graph, graph->boxToNode[b1], graph->boxToNode[b2]);
             }
         }
         else {
@@ -150,6 +152,7 @@ void copySCGraph(SCGraph * destGraph, const SCGraph * srcGraph) {
 
     for (short i=0; i < srcGraph->numNodes; i++) {
         destGraph->nodeToBox[i] = srcGraph->nodeToBox[i];
+        destGraph->boxToNode[i] = srcGraph->boxToNode[i];
     }
 
     short allArcsBuf1[NUM_EDGES];
@@ -299,6 +302,7 @@ static short findNodesWithValency(const SCGraph * graph, short valency, short * 
     short numFound = 0;
 
     for (short i=1; i < graph->numNodes; i++) {
+        log_debug("Valency of node %d is %d. numFound=%d\n", i, getNodeValency(graph, i), numFound);
         if (getNodeValency(graph, i) == valency) {
             nodeBuf[numFound++] = i;
         }
@@ -405,6 +409,7 @@ static short getSubGraphs(const SCGraph * superGraph, SCGraph *subGraphBuffer) {
     log_debug("labelMax: %d\n", labelMax);
 
     for(short l=1; l <= labelMax; l++) {
+        // Iterate over all the nodes in the superGraph and partition those that are labelled with 'l'
         log_debug("SubGraph %d:\n", l);
 
         SCGraph * subGraph = &(subGraphBuffer[l-1]);
@@ -412,14 +417,15 @@ static short getSubGraphs(const SCGraph * superGraph, SCGraph *subGraphBuffer) {
         subGraph->numNodes = 0;
         subGraph->nodeToBox[0] = NO_BOX;
 
-        // Iterate over all the nodes in the superGraph and partition those that are labelled with 'l'
         short subToSup[NUM_BOXES]; // the node indexed e.g. 4 in the superGraph might be indexed 1 in the subGraph. So this maps the two.
         subToSup[0] = 0;
         short subNodeCounter = 1;
         for(short superN=1; superN < superGraph->numNodes; superN++) {
             if (l == nodeToLabel[superN]) {
                 log_debug("Box %d -> super node %d -> sub node %d\n", superGraph->nodeToBox[superN], superN, subNodeCounter);
-                subGraph->nodeToBox[subNodeCounter] = superGraph->nodeToBox[superN];
+                Box box = superGraph->nodeToBox[superN];
+                subGraph->nodeToBox[subNodeCounter] = box;
+                subGraph->boxToNode[box] = subNodeCounter;
                 subToSup[subNodeCounter] = superN;
                 subNodeCounter++;
             }
@@ -780,6 +786,83 @@ short getGraphsPotentialMoves(const SCGraph * graph, Edge * potentialMoves) {
     return numMoves;
 }
 
+Edge getGraphsMonteCarloMove(UnscoredState rootState, int maxRuntime) {
+    /*
+    unsigned long long endTime = getTimeMillis() + (unsigned long long)maxRuntime;
+
+    GMCTSNode rootNode;
+    rootNode.parent = NULL;
+    rootNode.visits = 0;
+    rootNode.score = 0.0;
+    rootNode.move = NO_MOVE;
+    rootNode.numPotentialMoves = getGraphsPotentialMoves(rootGraph, rootNode.potentialMoves);
+    rootNode.nextPotentialMoveIndex = 0;
+    rootNode.numChildren = 0;
+
+    int iterationCount = 0;
+    while(true) {
+        iterationCount++;
+        if (iterationCount % 100 == 0) { // check to see if we're over the time limit
+            if (getTimeMillis() > endTime)
+                break;
+        }
+
+        GMCTSNode * node = &rootNode;
+        SCGraph tmpGraph;
+        copySCGraph(&tmpGraph, rootGraph);
+
+        while (node->numChildren == node->numPotentialMoves) { // node is fully expanded
+            // select the most interesting child
+            float bestUCB = -1.0;
+            GMCTSNode * bestChild;
+            for (short i=0; i < node->numChildren; i++) {
+                child = node->children[i];
+
+                float ucb = child->score / (float)child->visits;
+                if (ucb > bestUCB) {
+                    bestUCB = ucb;
+                    bestChild = child;
+                }
+            }
+
+            // make bestChild's move on tmpGraph
+
+            node = bestChild;
+        }
+        
+        else {
+            // add a child
+            child = (GMCTSNode *)malloc(sizeof(GMCTSNode));
+            node->children[node->numChildren++] = child;
+            child->parent = node;
+            child->visits = 0;
+            child->score = 0.0;
+            child->move = node->potentialMoves[node->nextPotentialMoveIndex++];
+            child->numPotentialMoves = getGraphsPotentialMoves(&tmpGraph, child->potentialMoves);
+            child->nextPotentialMoveIndex = 0;
+            child->numChildren = 0;
+        }
+
+        // simulate
+        
+        // backpropagate
+        
+        freeAdjLists(&tmpGraph);
+    }
+
+    log_log("Simulation complete! Ran for %d iterations.\n", iterationCount);
+
+    short bestVisits = -1;
+    short move = NO_EDGE;
+    for (short i=0; i < rootNode.numChildren; i++) {
+        if (rootNode.children[i].visits > bestVisits)
+            move = rootNode.children[i].move;
+    }
+    */
+
+    return NO_EDGE;
+}
+
 void runGraphsTests() {
     log_log("RUNNING GRAPHS TESTS\n");
 
@@ -798,6 +881,7 @@ void runGraphsTests() {
 
     log_debug("unscoredStateToSCGraph should behave correctly.\n");
     unscoredStateToSCGraph(&graph, &state);
+    assert(graph.boxToNode[0] == 1);
 
     //printSCGraph(&graph);
 
@@ -807,10 +891,11 @@ void runGraphsTests() {
     log_debug("It should have the right number of arcs.\n");
     assert(graph.numArcs == 72);
 
-    log_debug("nodeToBox should map correctly.\n");
+    log_debug("nodeToBox and boToNode should map correctly.\n");
     for(short i=1; i < graph.numNodes; i++) {
-        // This is just a unique feature of the graph for the empty board
         assert(graph.nodeToBox[i] == i-1);
+        log_debug("graph.boxToNode[%d] = %d\n", i-1, graph.boxToNode[i-1]);
+        assert(graph.boxToNode[i-1] == i);
     }
 
     log_debug("All nodes should have valency 4.\n");
@@ -858,6 +943,12 @@ void runGraphsTests() {
     assert(graph.nodeToBox[3] == 11);
     assert(graph.nodeToBox[4] == 12);
 
+    log_debug("boxToNode should map correctly.\n");
+    assert(graph.boxToNode[3] == 1);
+    assert(graph.boxToNode[4] == 2);
+    assert(graph.boxToNode[11] == 3);
+    assert(graph.boxToNode[12] == 4);
+
     log_debug("areNodesConnected should behave correctly.\n");
     assert(areNodesConnected(&graph,1,2));
     assert(areNodesConnected(&graph,1,3));
@@ -879,6 +970,7 @@ void runGraphsTests() {
 
     newAdjLists(&graph);
     graph.nodeToBox[1] = 1;
+    graph.boxToNode[1] = 1;
     addConnection(&graph, 0, 1);
 
     printSCGraph(&graph);
@@ -929,8 +1021,11 @@ void runGraphsTests() {
 
     newAdjLists(&graph);
     graph.nodeToBox[0] = NO_BOX;
+    graph.boxToNode[NO_BOX] = 0;
     graph.nodeToBox[1] = 1;
+    graph.boxToNode[1] = 1;
     graph.nodeToBox[2] = 2;
+    graph.boxToNode[2] = 2;
     addConnection(&graph, 1, 0);
     addConnection(&graph, 1, 2);
     addConnection(&graph, 2, 0);
@@ -1007,6 +1102,8 @@ void runGraphsTests() {
     graph.nodeToBox[0] = NO_BOX;
     graph.nodeToBox[1] = 1;
     graph.nodeToBox[2] = 2;
+    graph.boxToNode[1] = 1;
+    graph.boxToNode[2] = 2;
 
     printSCGraph(&graph);
 
@@ -1042,6 +1139,10 @@ void runGraphsTests() {
     graph.nodeToBox[2] = 2;
     graph.nodeToBox[3] = 3;
     graph.nodeToBox[4] = 4;
+    graph.boxToNode[1] = 1;
+    graph.boxToNode[2] = 2;
+    graph.boxToNode[3] = 3;
+    graph.boxToNode[4] = 4;
     addConnection(&graph, 1, 2);
     addConnection(&graph, 2, 3);
     addConnection(&graph, 3, 4);
@@ -1080,6 +1181,10 @@ void runGraphsTests() {
     graph.nodeToBox[2] = 2;
     graph.nodeToBox[3] = 3;
     graph.nodeToBox[4] = 4;
+    graph.boxToNode[1] = 1;
+    graph.boxToNode[2] = 2;
+    graph.boxToNode[3] = 3;
+    graph.boxToNode[4] = 4;
     addConnection(&graph, 1, 2);
     addConnection(&graph, 2, 3);
     addConnection(&graph, 3, 4);
@@ -1116,6 +1221,11 @@ void runGraphsTests() {
     graph.nodeToBox[3] = 3;
     graph.nodeToBox[4] = 4;
     graph.nodeToBox[5] = 5;
+    graph.boxToNode[1] = 1;
+    graph.boxToNode[2] = 2;
+    graph.boxToNode[3] = 3;
+    graph.boxToNode[4] = 4;
+    graph.boxToNode[5] = 5;
     addConnection(&graph, 1, 2);
     addConnection(&graph, 2, 3);
     addConnection(&graph, 3, 4);
@@ -1157,6 +1267,12 @@ void runGraphsTests() {
     graph.nodeToBox[4] = 4;
     graph.nodeToBox[5] = 5;
     graph.nodeToBox[6] = 6;
+    graph.boxToNode[1] = 1;
+    graph.boxToNode[2] = 2;
+    graph.boxToNode[3] = 3;
+    graph.boxToNode[4] = 4;
+    graph.boxToNode[5] = 5;
+    graph.boxToNode[6] = 6;
 
     // Group 1
     addConnection(&graph, 1, 4);
@@ -1206,15 +1322,10 @@ void runGraphsTests() {
     newAdjLists(&graph);
 
     graph.nodeToBox[0] = NO_BOX;
-    graph.nodeToBox[1] = 1;
-    graph.nodeToBox[2] = 2;
-    graph.nodeToBox[3] = 3;
-    graph.nodeToBox[4] = 4;
-    graph.nodeToBox[5] = 5;
-    graph.nodeToBox[6] = 6;
-    graph.nodeToBox[7] = 7;
-    graph.nodeToBox[8] = 8;
-    graph.nodeToBox[9] = 9;
+    for (short i=1; i < 10; i++) {
+        graph.nodeToBox[i] = i;
+        graph.boxToNode[i] = i;
+    }
     
     addConnection(&graph, 0, 2);
     addConnection(&graph, 1, 2);
