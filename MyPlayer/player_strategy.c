@@ -91,16 +91,30 @@ Edge getMoveAlways4Never3(UnscoredState * state) {
 }
 
 Edge getDeepBoxMove(UnscoredState * state, int turnTimeMillis) {
-    short numEdgesLeft = getNumFreeEdges(state);
-
     Edge moveChoice;
-    if (numEdgesLeft <= 37) {
-        log_log("Using alpha-beta strategy...\n");
-        moveChoice = getABMove(state, 5 + 10-(int)numEdgesLeft/3.0, false);
-    }
-    else {
+
+    short numEdgesLeft = getNumFreeEdges(state);
+    if (numEdgesLeft > 37) {
         log_log("Using always4never3 strategy...\n");
         moveChoice = getMoveAlways4Never3(state);
+    }
+    else {
+        log_log("Looking for urgent moves...\n");
+        SCGraph graph;
+        unscoredStateToSCGraph(&graph, state);
+
+        Edge urgentMoves[2];
+        short numUrgentMoves = getSuperGraphUrgentMoves(&graph, urgentMoves);
+        freeAdjLists(&graph);
+
+        if (numUrgentMoves == 1) {
+            log_log("Found one: %d\n", urgentMoves[0]);
+            moveChoice = urgentMoves[0];
+        }
+        else {
+            log_log("Didn't find one. Using alpha-beta strategy...\n");
+            moveChoice = getABMove(state, 7 + 10-(int)numEdgesLeft/3.0, false);
+        }
     }
 
     // The graph representation knows nothing about the distinctions of corner edges.

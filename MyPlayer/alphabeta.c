@@ -269,6 +269,229 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
         return node->value;
 }
 
+static short doAlphaBetaStack(UnscoredState * state, short depth, int * nodesVisitedCount, int * branchesPrunedCount, bool isRoot, double alpha, double beta, Edge move, short totalBoxesTaken, bool isMaximizer, short value) {
+    // If isRoot, returns the best move. Else returns a score for the node.
+   
+    //printUnscoredState(state);
+    //log_log("doAlphaBetaStack called with depth: %d, isRoot: %d, alpha: %G, beta: %G, move: %d, totalBoxesTaken: %d, isMaximizer: %d, value: %d\n", depth, isRoot, alpha, beta, move, totalBoxesTaken, isMaximizer, value);
+    *nodesVisitedCount += 1;
+
+
+    short numFreeEdges = getNumFreeEdges(state);
+    if (depth == 0 || numFreeEdges == 0) { // Node is terminal
+        short score = totalBoxesTaken;
+
+        if (depth == 0 && numFreeEdges > 0) { // Compute a heuristic value for the node
+            SCGraph graph;
+            unscoredStateToSCGraph(&graph, state);
+
+            short initRemainingNodes = getNumNodesLeftToCapture(&graph);
+
+            // While urgent moves exist, make them.
+            Edge urgentMovesBuf[2];
+            while(getSuperGraphUrgentMoves(&graph, urgentMovesBuf) == 1)
+                removeConnectionEdge(&graph, urgentMovesBuf[0]);
+
+            short finalRemainingNodes = getNumNodesLeftToCapture(&graph);
+            short nodesTaken = initRemainingNodes - finalRemainingNodes;
+
+            if (isMaximizer)
+                score += nodesTaken;
+
+            // Then assume we get half of what's left
+            score += (int)finalRemainingNodes/2.0;
+            freeAdjLists(&graph);
+        }
+
+        //log_log("score for node: %d\n", score);
+        return score;
+    }
+
+    // Else enumerate the possible moves and try them.
+    SCGraph graph;
+    unscoredStateToSCGraph(&graph, state);
+
+    Edge potentialMoves[NUM_EDGES];
+    short numPotentialMoves = getGraphsPotentialMoves(&graph, potentialMoves);
+
+    { // Order the moves so those that give away boxes are considered last. Using a new scope like this saves memory.
+        Edge terribleMoves[NUM_EDGES];
+        Edge badMoves[NUM_EDGES];
+        Edge goodMoves[NUM_EDGES];
+        short numBadMoves = 0;
+        short numGoodMoves = 0;
+        short numTerribleMoves = 0;
+        for(short i=0; i < numPotentialMoves; i++) {
+            Edge edge = potentialMoves[i];
+            const Box * edgeBoxes = getEdgeBoxes(edge);
+
+            short node1, node2;
+            if(edgeBoxes[0] == NO_BOX)
+                node1 = 0;
+            else
+                node1 = graph.boxToNode[edgeBoxes[0]];
+
+            if(edgeBoxes[1] == NO_BOX)
+                node2 = 0;
+            else
+                node2 = graph.boxToNode[edgeBoxes[1]];
+
+            short badness = 0;
+            if (getNodeValency(&graph, node1) == 2)
+                badness++;
+            if (getNodeValency(&graph, node2) == 2)
+                badness++;
+
+            switch(badness) {
+                case 0:
+                    goodMoves[numGoodMoves++] = edge;
+                    break;
+                case 1:
+                    badMoves[numBadMoves++] = edge;
+                    break;
+                case 2:
+                    terribleMoves[numTerribleMoves++] = edge;
+                    break;
+            }
+        }
+
+        for (short i=0; i < numGoodMoves; i++)
+            potentialMoves[i] = goodMoves[i];
+
+        for (short i=0; i < numBadMoves; i++)
+            potentialMoves[numGoodMoves + i] = badMoves[i];
+
+        for (short i=0; i < numTerribleMoves; i++)
+            potentialMoves[numGoodMoves + numBadMoves + i] = terribleMoves[i];
+    }
+
+    unsigned long long endTime;
+    if (isRoot) // Limit the maximum turn time to 10 seconds
+        endTime = getTimeMillis() + 10000;
+
+    Edge bestMove = NO_EDGE;
+    for(short i=0; i < numPotentialMoves; i++) {
+        //log_log("Trying move %d. (%d of %d)\n", potentialMoves[i], i+1, numPotentialMoves);
+        Edge untriedMove = potentialMoves[i];
+        // untriedMove might be a corner move in which case it may need to be converted
+        if (isEdgeTaken(state, untriedMove))
+            untriedMove = getCorrespondingCornerEdge(untriedMove);
+
+        //ABNode * child = createABNodeAndAddToParent(node, untriedMove, state);
+
+
+        short boxesTaken = howManyBoxesDoesMoveComplete(state, untriedMove);
+        setEdgeTaken(state, untriedMove); // now it's a postMoveState
+
+        short v = 0;
+        
+        {
+            UnscoredState * child_state = state;
+            short child_depth = numPotentialMoves == 1 ? depth : depth - 1; // don't decrease depth if an urgent move was played (helps with looking ahead at chains)
+            int * child_nodesVisitedCount = nodesVisitedCount;
+            int * child_branchesPrunedCount = branchesPrunedCount;
+            bool child_isRoot = false;
+            double child_alpha = alpha;
+            double child_beta = beta;
+            Edge child_move = untriedMove;
+
+            short child_totalBoxesTaken;
+            short child_isMaximizer;
+            short child_value;
+            if (isMaximizer) {
+                child_totalBoxesTaken = totalBoxesTaken + boxesTaken;
+
+                if (boxesTaken > 0) {
+                    child_isMaximizer = true;
+                }
+                else
+                    child_isMaximizer = false;
+            }
+            else {
+                child_totalBoxesTaken = totalBoxesTaken;
+
+                if (boxesTaken > 0)
+                    child_isMaximizer = false;
+                else
+                    child_isMaximizer = true;
+            }
+
+            if (child_isMaximizer)
+                child_value = ALPHA_MIN;
+            else
+                child_value = BETA_MAX;
+
+            v = doAlphaBetaStack(
+                    child_state,
+                    child_depth,
+                    child_nodesVisitedCount,
+                    child_branchesPrunedCount,
+                    child_isRoot,
+                    child_alpha,
+                    child_beta,
+                    child_move,
+                    child_totalBoxesTaken,
+                    child_isMaximizer,
+                    child_value
+                    );
+
+            //log_log("parent at %p: return value from child is %d\n", &depth, v);
+        }
+
+        setEdgeFree(state, untriedMove); // reset the state
+
+        if(isRoot)
+            log_log("Checked untried move %d. Score is: %d\n", untriedMove, v);
+
+        if (isMaximizer) {
+            if (v > value) {
+                //log_log("node is maximizer. Setting value at %p to %d\n", &value, v);
+                value = v;
+                bestMove = untriedMove;
+            }
+            alpha = max(alpha, v);
+            if (beta <= alpha) {
+                *branchesPrunedCount += 1;
+                log_debug("Pruned branch with beta cutoff!\n"); 
+                break; // beta cutoff
+            }
+        }
+        else { // node is minimizer
+            if (v < value) {
+                //log_log("node is minimizer. Setting value at %p to %d\n", &value, v);
+                value = v;
+                bestMove = untriedMove;
+            }
+            beta = min(beta, v);
+
+            if (beta <= alpha) {
+                *branchesPrunedCount += 1;
+                log_debug("Pruned branch with alpha cutoff!\n"); 
+                break; // alpha cutoff
+            }
+        }
+
+        if (isRoot && getTimeMillis() > endTime) {
+            log_log("Search has taken over 10 seconds. Returning best move found so far.\n");
+            // Fail safe: Ensure we return a move
+            if (bestMove == NO_EDGE)
+                bestMove = potentialMoves[0];
+
+            break;
+        }
+    }
+
+    freeAdjLists(&graph);
+
+    if (isRoot)
+        return bestMove;
+    else {
+        //log_log("Returning value at %p which is %d\n", &value, value);
+        assert(value > ALPHA_MIN && value < BETA_MAX);
+        return value;
+    }
+}
+
 Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
     log_log("\nStarting getABMove with maxDepth %d\n", maxDepth);
 
@@ -276,15 +499,18 @@ Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
     int nodesVisitedCount = 0;
     int branchesPrunedCount = 0;
     
-    ABNode * rootNode = newABRootNode(state);
+    //ABNode * rootNode = newABRootNode(state);
     UnscoredState rootState = *state;
 
     printUnscoredState(&rootState);
 
-    Edge bestMove = doAlphaBeta(rootNode, &rootState, maxDepth, &nodesVisitedCount, &branchesPrunedCount, true);
+    //Edge bestMove = doAlphaBeta(rootNode, &rootState, maxDepth, &nodesVisitedCount, &branchesPrunedCount, true);
+//static short doAlphaBetaStack(UnscoredState * state, short depth, int * nodesVisitedCount, int * branchesPrunedCount, bool isRoot, double alpha, double beta, Edge move, short totalBoxesTaken, bool isMaximizer, bool value) {
+    Edge bestMove = doAlphaBetaStack(&rootState, maxDepth, &nodesVisitedCount, &branchesPrunedCount, true, ALPHA_MIN, BETA_MAX, NO_EDGE, 0, true, ALPHA_MIN);
+
     log_log("getABMove: Best move is %d.\n", bestMove);
 
-    freeABNode(rootNode);
+    //freeABNode(rootNode);
 
     unsigned long long endTime = getTimeMillis();
     long timeSpent = endTime - startTime;
