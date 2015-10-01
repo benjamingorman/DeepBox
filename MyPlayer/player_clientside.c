@@ -273,7 +273,7 @@ int main(int argc, char ** argv) {
             log_log("Server command: %s\nServer data: %s\n", cmd_buf, data_buf);
             if (strcmp(cmd_buf, "getName") == 0) {
                 log_log("Recognized message 'getName'. My name is %s\n", PLAYER_NAME);
-                sprintf(send_buf, "%s %s %d", PLAYER_NAME, strategyName, turnTimeMillis);
+                sprintf(send_buf, "%s", PLAYER_NAME);
             }
             else if (strcmp(cmd_buf, "newGame") == 0) {
                 log_log("Recognized message 'newGame'. Sending ack.\n");

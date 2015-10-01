@@ -432,63 +432,62 @@ static short getSubGraphs(const SCGraph * superGraph, SCGraph *subGraphBuffer) {
 
         if (currentLabelStackHead == -1) { // the stack is empty
             label++;
-            log_debug("Stack is empty. Increased label to %d. Searching for an unlabelled node...\n", label);
+            //log_debug("Stack is empty. Increased label to %d. Searching for an unlabelled node...\n", label);
 
             // find an unlabelled node and push it
             for(short node=1; node < superGraph->numNodes; node++) {
-                log_debug("getSubGraphs: considering node %d\n", node);
+                //log_debug("getSubGraphs: considering node %d\n", node);
 
-                if (getNodeValency(superGraph, node) == 0) { // it's isolated so don't consider it
-                    log_debug("getSubGraphs: node is isolated so not considering it.\n");
-                    nodeToLabel[node] = -1;
+                if(!doesBTreeContain(alreadyLabelled, node)) {
+                    if (getNodeValency(superGraph, node) == 0) // it's isolated so don't consider it
+                        nodeToLabel[node] = -1;
+                    else {
+                        nodeToLabel[node] = label;
+                        currentLabelStack[++currentLabelStackHead] = node;
+                    }
+
                     insertBTree(alreadyLabelled, node);
                     numAlreadyLabelled++;
-
-                }
-                else if(!doesBTreeContain(alreadyLabelled, node)) {
-                    log_debug("getSubGraphs: node is unlabelled. Pushing it to the stack.\n");
-                    nodeToLabel[node] = label;
-                    insertBTree(alreadyLabelled, node);
-                    numAlreadyLabelled++;
-
-                    currentLabelStack[++currentLabelStackHead] = node;
-                    break;
+                    log_debug("getSubGraphs: labelled %d.\n", node);
                 }
                 else {
-                    log_debug("getSubGraphs: node is already labelled.\n");
+                    //log_debug("getSubGraphs: node is already labelled.\n");
                 }
             }
         }
         else {
             // Pop a node off the stack
             short node = currentLabelStack[currentLabelStackHead--];
-            log_debug("Stack head at %d. Popping one... It's %d\n", currentLabelStackHead+1, node);
+            //log_debug("Stack head at %d. Popping one... It's %d\n", currentLabelStackHead+1, node);
 
             // Infect it's neighbours
             short neighbours[NEIGHBOUR_MAX];
             short numNeighbours = getConnectedNodes(superGraph, node, neighbours);
 
-            log_debug("numNeighbours: %d\n", numNeighbours);
+            //log_debug("numNeighbours: %d\n", numNeighbours);
 
             for(short i=0; i < numNeighbours; i++) {
                 short neighbour = neighbours[i];
-                log_debug("Considering neighbour: %d\n", neighbour);
+                //log_debug("Considering neighbour: %d\n", neighbour);
 
                 if(!doesBTreeContain(alreadyLabelled, neighbour)) {
-                    numAlreadyLabelled++;
                     nodeToLabel[neighbour] = label;
                     insertBTree(alreadyLabelled, neighbour);
+                    numAlreadyLabelled++;
 
                     currentLabelStack[++currentLabelStackHead] = neighbour;
-                    log_debug("Labelled neighbour with %d, numAlreadyLabelled: %d, nodeToLabel[%d] = %d, currentLabelStack[%d] = %d\n", label, numAlreadyLabelled, neighbour, label, currentLabelStackHead-1, neighbour);
+                    log_debug("getSubGraphs: labelled %d.\n", node);
+                    //log_debug("Labelled neighbour with %d, numAlreadyLabelled: %d, nodeToLabel[%d] = %d, currentLabelStack[%d] = %d\n", label, numAlreadyLabelled, neighbour, label, currentLabelStackHead-1, neighbour);
                 }
                 else {
-                    log_debug("Neighbour is already labelled.\n");
+                    //log_debug("Neighbour is already labelled.\n");
                 }
             }
         }
     }
+    assert(numAlreadyLabelled == superGraph->numNodes);
     log_debug("getSubGraphs: All nodes have been labelled!\n");
+    freeBTree(alreadyLabelled);
 
     short labelMax = label;
     log_debug("labelMax: %d\n", labelMax);
@@ -878,6 +877,9 @@ static short getNonIsomorphicMoves(const SCGraph * graph, Edge * movesBuf) {
 
             //log_debug("getNonIsomorphicMoves: Move %d leads to an unseen position. Adding it.\n", move);
         }
+        else {
+            freeAdjLists(&childGraph);
+        }
     }
 
     // Free adjacency matrices for all created child graphs
@@ -909,9 +911,11 @@ short getGraphsPotentialMoves(const SCGraph * graph, Edge * potentialMoves) {
         // Else return all non urgent moves
         for(short i=0; i < numSubGraphs; i++) {
             numMoves += getNonIsomorphicMoves(&subGraphs[i], &(potentialMoves[numMoves]));
-            freeAdjLists(&subGraphs[i]);
         }
     }
+
+    for(short i=0; i < numSubGraphs; i++)
+        freeAdjLists(&subGraphs[i]);
 
     log_debug("getGraphsPotentialMoves: Returning %d moves. urgent=%d\n", numMoves, foundUrgentMoves);
 
@@ -1267,7 +1271,6 @@ void runGraphsTests() {
 
     newAdjLists(&graph);
     graph.nodeToBox[0] = NO_BOX;
-    graph.boxToNode[NO_BOX] = 0;
     graph.nodeToBox[1] = 1;
     graph.boxToNode[1] = 1;
     graph.nodeToBox[2] = 2;

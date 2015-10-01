@@ -181,18 +181,12 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
 
             switch(badness) {
                 case 0:
-                    if (isRoot)
-                        log_log("Potential move %d is good.\n", edge);
                     goodMoves[numGoodMoves++] = edge;
                     break;
                 case 1:
-                    if (isRoot)
-                        log_log("Potential move %d is bad.\n", edge);
                     badMoves[numBadMoves++] = edge;
                     break;
                 case 2:
-                    if (isRoot)
-                        log_log("Potential move %d is terrible.\n", edge);
                     terribleMoves[numTerribleMoves++] = edge;
                     break;
             }
@@ -252,6 +246,8 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
             }
         }
     }
+
+    freeAdjLists(&graph);
 
     if (isRoot)
         return bestMove;

@@ -141,8 +141,8 @@ def playGame(gui,player1name,player2name,player1,player2,playsfirst,scorePlayer1
         board.setEdgeState(edge,const.PLAYED)
         # Check whether any squares have been captured and update scores accordingly
         captured = board.findCaptured(edge)
-        print((player1name if turn == const.PLAYER1 else player2name) + " takes " + str(edge) + " for " + str(len(captured)) + " points")
-        print("Score: " + player1name + "(" + str(scorePlayer1) + ") = " + str(scores[const.PLAYER1]) + ", " + player2name + "(" + str(scorePlayer2) + ") = " + str(scores[const.PLAYER2]))
+        #print((player1name if turn == const.PLAYER1 else player2name) + " takes " + str(edge) + " for " + str(len(captured)) + " points")
+        #print("Score: " + player1name + "(" + str(scorePlayer1) + ") = " + str(scores[const.PLAYER1]) + ", " + player2name + "(" + str(scorePlayer2) + ") = " + str(scores[const.PLAYER2]))
         if len(captured)==0:
             # No squares captured so switch turns
             turn = const.PLAYER1 if turn==const.PLAYER2 else const.PLAYER2
