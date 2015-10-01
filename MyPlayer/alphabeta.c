@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-//#include <jansson.h>
+#include <assert.h>
+#include <jansson.h>
 #include "game_board.h"
 #include "util.h"
 #include "alphabeta.h"
@@ -10,8 +11,8 @@
 static const short ALPHA_MIN = -100;
 static const short BETA_MAX = 100;
 
-//static void saveABNodeJSON(const ABNode * node, UnscoredState state, const char * filePath);
-//static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state);
+static void saveABNodeJSON(const ABNode * node, UnscoredState state, const char * filePath);
+static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state);
 
 static ABNode * newABRootNode(const UnscoredState * rootState) {
     ABNode * node = (ABNode *)malloc(sizeof(ABNode));
@@ -99,111 +100,163 @@ static ABNode * createABNodeAndAddToParent(ABNode * parent, Edge move, const Uns
     return child;
 }
 
-static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int * nodesVisitedCount, int * branchesPrunedCount) {
+static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int * nodesVisitedCount, int * branchesPrunedCount, bool isRoot) {
+    // If isRoot, returns the best move. Else returns a score for the node.
+   
     log_debug("doAlphaBeta called for node at %p with move %d and depth %d\n", (void *)node, node->move, depth);
     *nodesVisitedCount += 1;
 
-    /*
-    // TODO: Clean this up
-    // Sort the potential moves in order with box completing moves first.
-    // Filter out corresponding corner pairs since only one needs to be visited.
-    // Use a new scope to save memory.
-    Edge potentialMoves[NUM_EDGES];
-    short numPotentialMoves = 0;
-    {
-        BTree * excludedCornerSet = newBTree(NO_EDGE); 
+    short numFreeEdges = getNumFreeEdges(state);
+    if (depth == 0 || numFreeEdges == 0) { // Node is terminal
+        log_debug("Depth is 0...\n");
+        short score = 0;
 
-        short numBoxCompletingMoves = 0;
-        Edge boxCompletingMoves[NUM_EDGES];
-        short numNonBoxCompletingMoves = 0;
-        Edge nonBoxCompletingMoves[NUM_EDGES];
+        if (depth == 0 && numFreeEdges > 0) { // Compute a heuristic value for the node
+            SCGraph graph;
+            unscoredStateToSCGraph(&graph, state);
 
-        for (Edge e=0; e < NUM_EDGES; e++) {
-            if (state->edges[e] == FREE && !doesBTreeContain(excludedCornerSet, e)) {
-                if (isBoxCompletingMove(state, e)) {
-                    boxCompletingMoves[numBoxCompletingMoves++] = e;
+            short initRemainingNodes = getNumNodesLeftToCapture(&graph);
 
-                    // The edge may not be a corner, in which case NO_EDGE is inserted into the tree.
-                    // This is not a problem since it was initialized on that value anyway.
-                    insertBTree(excludedCornerSet, getCorrespondingCornerEdge(e));
-                }
-                else {
-                    nonBoxCompletingMoves[numNonBoxCompletingMoves++] = e;
-                    insertBTree(excludedCornerSet, getCorrespondingCornerEdge(e));
-                }
-            }
+            // While urgent moves exist, make them.
+            Edge urgentMovesBuf[2];
+            while(getSuperGraphUrgentMoves(&graph, urgentMovesBuf) == 1)
+                removeConnectionEdge(&graph, urgentMovesBuf[0]);
+
+            short finalRemainingNodes = getNumNodesLeftToCapture(&graph);
+            short nodesTaken = initRemainingNodes - finalRemainingNodes;
+
+            if (node->isMaximizer)
+                score += nodesTaken;
+
+            // Then assume we get half of what's left
+            score += (int)finalRemainingNodes/2.0;
+            freeAdjLists(&graph);
         }
 
-        freeBTree(excludedCornerSet);
-        
-        // Read the box completing moves and then the non-box completing moves into potentialMoves.
-        for(short i=0; i<numBoxCompletingMoves; i++) {
-            potentialMoves[i] = boxCompletingMoves[i];
-        }
-
-        for(short i=0; i<numNonBoxCompletingMoves; i++) {
-            potentialMoves[numBoxCompletingMoves+i] = nonBoxCompletingMoves[i];
-        }
-
-        numPotentialMoves = numBoxCompletingMoves + numNonBoxCompletingMoves;
-    }
-    */
-
-    Edge potentialMoves[NUM_EDGES];
-    SCGraph graph;
-    unscoredStateToSCGraph(&graph, state);
-    short numPotentialMoves = getGraphsPotentialMoves(&graph, potentialMoves);
-
-    if (numPotentialMoves == 0 || depth == 0) { // TODO: add extra heuristics for when depth is 0
-        log_debug("Node is terminal or depth is 0...\n");
         // Count up the tree the number of boxes that have been taken.
-        short totalNumBoxes = 0;
-
         do {
             if (node->isMaximizer)
-                totalNumBoxes += node->numBoxesTakenByMove;
+                score += node->numBoxesTakenByMove;
             node = node->parent;
         } while (node != NULL);
 
-        log_debug("totalNumBoxes counted: %d\n", totalNumBoxes);
-        return totalNumBoxes;
+        log_debug("score for node: %d\n", score);
+        return score;
     }
-    else {
+
+    // Else enumerate the possible moves and try them.
+    SCGraph graph;
+    unscoredStateToSCGraph(&graph, state);
+
+    Edge potentialMoves[NUM_EDGES];
+    short numPotentialMoves = getGraphsPotentialMoves(&graph, potentialMoves);
+
+    { // Order the moves so those that give away boxes are considered last. Using a new scope like this saves memory.
+        Edge terribleMoves[NUM_EDGES];
+        Edge badMoves[NUM_EDGES];
+        Edge goodMoves[NUM_EDGES];
+        short numBadMoves = 0;
+        short numGoodMoves = 0;
+        short numTerribleMoves = 0;
         for(short i=0; i < numPotentialMoves; i++) {
-            Edge untriedMove = potentialMoves[i];
-            log_debug("Checking move %d (%d of %d)...\n", untriedMove, i+1, numPotentialMoves);
+            Edge edge = potentialMoves[i];
+            const Box * edgeBoxes = getEdgeBoxes(edge);
 
-            ABNode * child = createABNodeAndAddToParent(node, untriedMove, state);
+            short node1, node2;
+            if(edgeBoxes[0] == NO_BOX)
+                node1 = 0;
+            else
+                node1 = graph.boxToNode[edgeBoxes[0]];
 
-            setEdgeTaken(state, untriedMove); // now it's a postMoveState
-            double v = doAlphaBeta(child, state, depth-1, nodesVisitedCount, branchesPrunedCount);
-            setEdgeFree(state, untriedMove); // reset the state
+            if(edgeBoxes[1] == NO_BOX)
+                node2 = 0;
+            else
+                node2 = graph.boxToNode[edgeBoxes[1]];
 
-            log_debug("Node v is %G\n", v);
+            short badness = 0;
+            if (getNodeValency(&graph, node1) == 2)
+                badness++;
+            if (getNodeValency(&graph, node2) == 2)
+                badness++;
 
-            if (node->isMaximizer) {
-                node->value = max(node->value, v);
-                node->alpha = max(node->alpha, v);
-                if (node->beta <= node->alpha) {
-                    *branchesPrunedCount += 1;
-                    log_debug("Pruned branch with beta cutoff!\n"); 
-                    break; // beta cutoff
-                }
+            switch(badness) {
+                case 0:
+                    if (isRoot)
+                        log_log("Potential move %d is good.\n", edge);
+                    goodMoves[numGoodMoves++] = edge;
+                    break;
+                case 1:
+                    if (isRoot)
+                        log_log("Potential move %d is bad.\n", edge);
+                    badMoves[numBadMoves++] = edge;
+                    break;
+                case 2:
+                    if (isRoot)
+                        log_log("Potential move %d is terrible.\n", edge);
+                    terribleMoves[numTerribleMoves++] = edge;
+                    break;
             }
-            else { // node is minimizer
-                node->value = min(node->value, v);
-                node->beta = min(node->beta, v);
+        }
 
-                if (node->beta <= node->alpha) {
-                    *branchesPrunedCount += 1;
-                    log_debug("Pruned branch with alpha cutoff!\n"); 
-                    break; // alpha cutoff
-                }
+        for (short i=0; i < numGoodMoves; i++)
+            potentialMoves[i] = goodMoves[i];
+
+        for (short i=0; i < numBadMoves; i++)
+            potentialMoves[numGoodMoves + i] = badMoves[i];
+
+        for (short i=0; i < numTerribleMoves; i++)
+            potentialMoves[numGoodMoves + numBadMoves + i] = terribleMoves[i];
+    }
+
+    Edge bestMove = NO_EDGE;
+    for(short i=0; i < numPotentialMoves; i++) {
+        Edge untriedMove = potentialMoves[i];
+        // untriedMove might be a corner move in which case it may need to be converted
+        if (isEdgeTaken(state, untriedMove))
+            untriedMove = getCorrespondingCornerEdge(untriedMove);
+
+        ABNode * child = createABNodeAndAddToParent(node, untriedMove, state);
+
+
+        setEdgeTaken(state, untriedMove); // now it's a postMoveState
+        
+        short v = doAlphaBeta(child, state, depth-1, nodesVisitedCount, branchesPrunedCount, false);
+        setEdgeFree(state, untriedMove); // reset the state
+
+        if(isRoot)
+            log_log("Checked untried move %d. Score is: %d\n", untriedMove, v);
+
+        if (node->isMaximizer) {
+            if (v > node->value) {
+                node->value = v;
+                bestMove = untriedMove;
+            }
+            node->alpha = max(node->alpha, v);
+            if (node->beta <= node->alpha) {
+                *branchesPrunedCount += 1;
+                log_debug("Pruned branch with beta cutoff!\n"); 
+                break; // beta cutoff
+            }
+        }
+        else { // node is minimizer
+            if (v < node->value) {
+                node->value = v;
+                bestMove = untriedMove;
+            }
+            node->beta = min(node->beta, v);
+
+            if (node->beta <= node->alpha) {
+                *branchesPrunedCount += 1;
+                log_debug("Pruned branch with alpha cutoff!\n"); 
+                break; // alpha cutoff
             }
         }
     }
 
-    return node->value;
+    if (isRoot)
+        return bestMove;
+    else
+        return node->value;
 }
 
 Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
@@ -218,35 +271,8 @@ Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
 
     printUnscoredState(&rootState);
 
-    short v = doAlphaBeta(rootNode, &rootState, maxDepth, &nodesVisitedCount, &branchesPrunedCount);
-    log_log("getABMove: best v is %d\n", v);
-
-    // Find the child that v came from:
-    // Perhaps doAlphaBeta could return a node instead? This would save a bit of computation.
-    // It would also make things a little bit more complicated during the actual algorithm.
-    
-    ABNode * child;
-    Edge bestMove = NO_EDGE;
-
-    child = rootNode->child;
-    do {
-        if (child->value == v) {
-            bestMove = child->move;
-            log_log("getABMove: best move is %d\n", bestMove);
-            break;
-        }
-    } while ((child = child->sibling) != NULL);
-
-    if (bestMove == NO_EDGE)
-        log_error("[ERROR] getABMove: No move found.\n");
-
-
-    /*
-    if (saveJSON) {
-        log_log("Saving root node JSON to abRootNode.json\n");
-        saveABNodeJSON(rootNode, rootState, "abRootNode.json");
-    }
-    */
+    Edge bestMove = doAlphaBeta(rootNode, &rootState, maxDepth, &nodesVisitedCount, &branchesPrunedCount, true);
+    log_log("getABMove: Best move is %d.\n", bestMove);
 
     freeABNode(rootNode);
 
@@ -258,7 +284,6 @@ Edge getABMove(const UnscoredState * state, short maxDepth, bool saveJSON) {
     return bestMove;
 }
 
-/*
 static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state) {
     json_t * j;
 
@@ -296,8 +321,6 @@ static json_t * ABNodeToJSON(const ABNode * node, UnscoredState state) {
             "beta", node->beta,
             "move", node->move,
             "numBoxesTakenByMove", node->numBoxesTakenByMove,
-            //"potentialMoves", potentialMovesBuffer,
-            //"numPotentialMoves", node->numPotentialMoves,
             "numChildren", node->numChildren,
             "children", children_array,
             "isMaximizer", node->isMaximizer,
@@ -311,7 +334,6 @@ static void saveABNodeJSON(const ABNode * node, UnscoredState rootState, const c
     json_dump_file(j, filePath, 0);
     json_decref(j);
 }
-*/
 
 void runAlphaBetaTests() {
     log_log("RUNNING ALPHA BETA TESTS\n");

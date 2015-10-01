@@ -38,6 +38,17 @@ Edge getFirstBoxCompletingMove(UnscoredState * state) {
     return NO_EDGE;
 }
 
+Edge getGMCTSMove(const UnscoredState * state, int runTimeMillis) {
+    Edge move = getGraphsMonteCarloMove(state, runTimeMillis);
+
+    if (isEdgeTaken(state, move)) { // fix graph representation not knowing about corners
+        log_log("getGMCTSMove: Converting taken corner edge %d to its corresponding corner edge.\n", move);
+        move = getCorrespondingCornerEdge(move);
+    }
+
+    return move;
+}
+
 Edge getMoveAlways4Never3(UnscoredState * state) {
     // Returns a box completing move if one exists.
     // Else returns a move which does not form the 3rd edge of a box.
@@ -79,56 +90,17 @@ Edge getMoveAlways4Never3(UnscoredState * state) {
     }
 }
 
-Edge getDeepBox1Move(UnscoredState * state, int turnTimeMillis) {
+Edge getDeepBoxMove(UnscoredState * state, int turnTimeMillis) {
     short numEdgesLeft = getNumFreeEdges(state);
 
-    if (numEdgesLeft <= 14) {
+    Edge moveChoice;
+    if (numEdgesLeft <= 37) {
         log_log("Using alpha-beta strategy...\n");
-        return getABMove(state, 14, false);
-    }
-    else if (numEdgesLeft <= 33) {
-        log_log("Using monte-carlo strategy...\n");
-        return getMCTSMove(state, turnTimeMillis, false);
+        moveChoice = getABMove(state, 6 + 8-(int)numEdgesLeft/5.0, false);
     }
     else {
         log_log("Using always4never3 strategy...\n");
-        return getMoveAlways4Never3(state);
-    }
-}
-
-Edge getDeepBox2Move(UnscoredState * state, int turnTimeMillis) {
-    SCGraph graph;
-    unscoredStateToSCGraph(&graph, state);
-
-    Edge urgentMoves[NUM_EDGES];
-    short numUrgentMoves = getGraphsPotentialMoves(&graph, urgentMoves);
-
-    log_debug("%d graphs moves found: ", numUrgentMoves);
-    for (short i=0; i < numUrgentMoves; i++)
-        log_debug("%d ", urgentMoves[i]);
-
-    log_debug("\n");
-
-    Edge moveChoice = NO_EDGE;
-    if (numUrgentMoves == 1) {
-        log_log("getDeepBox2Move: Returning urgent move.\n");
-        moveChoice = urgentMoves[0];
-    }
-    else {
-        short numEdgesLeft = getNumFreeEdges(state);
-
-        if (numEdgesLeft <= 19) {
-            log_log("getDeepBox2Move: Using alpha beta.\n");
-            moveChoice = getABMove(state, 19, false);
-        }
-        else if (numEdgesLeft <= 50) {
-            log_log("getDeepBox2Move: Using monte carlo.\n");
-            moveChoice = getMCTSMove(state, turnTimeMillis, false);
-        }
-        else {
-            log_log("getDeepBox2Move: Using getMoveAlways4Never3.\n");
-            moveChoice = getMoveAlways4Never3(state);
-        }
+        moveChoice = getMoveAlways4Never3(state);
     }
 
     // The graph representation knows nothing about the distinctions of corner edges.
@@ -178,17 +150,17 @@ Edge chooseMove(UnscoredState state, Strategy strategy, int turnTimeMillis) {
         case MONTE_CARLO:
             moveChoice = getMCTSMove(&state, turnTimeMillis, false);
             break;
+        case GMCTS:
+            moveChoice = getGMCTSMove(&state, turnTimeMillis);
+            break;
         case ALPHA_BETA:
-            moveChoice = getABMove(&state, 20, false);
+            moveChoice = getABMove(&state, 7, false);
             break;
         case GRAPHS:
             moveChoice = getGraphsMove(&state);
             break;
-        case DEEPBOX1:
-            moveChoice = getDeepBox1Move(&state, turnTimeMillis);
-            break;
-        case DEEPBOX2:
-            moveChoice = getDeepBox2Move(&state, turnTimeMillis);
+        case DEEPBOX:
+            moveChoice = getDeepBoxMove(&state, turnTimeMillis);
             break;
     }
 

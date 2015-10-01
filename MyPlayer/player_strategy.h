@@ -5,10 +5,10 @@ typedef enum {
     RANDOM_MOVE,
     FIRST_BOX_COMPLETING_MOVE,
     MONTE_CARLO,
+    GMCTS,
     ALPHA_BETA,
     GRAPHS,
-    DEEPBOX1,
-    DEEPBOX2
+    DEEPBOX
 } Strategy;
 
 Edge getRandomMove(UnscoredState *);

@@ -7,13 +7,13 @@ typedef struct ABNode {
 
     Edge move;
     short numBoxesTakenByMove;
-    Edge potentialMoves[NUM_EDGES];
-    short numPotentialMoves;
+    //Edge potentialMoves[NUM_EDGES]; // R
+    //short numPotentialMoves; // R
 
     struct ABNode * parent;
     struct ABNode * child;
     struct ABNode * sibling;
-    short numChildren;
+    short numChildren; // R
 
     bool isMaximizer;
     double value;

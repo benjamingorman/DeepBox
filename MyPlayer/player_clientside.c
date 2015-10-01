@@ -143,16 +143,17 @@ int main(int argc, char ** argv) {
                     strategy = FIRST_BOX_COMPLETING_MOVE;
                 else if(strcmp("monte_carlo", strategyName) == 0)
                     strategy = MONTE_CARLO;
+                else if(strcmp("gmcts", strategyName) == 0)
+                    strategy = GMCTS;
                 else if(strcmp("alpha_beta", strategyName) == 0)
                     strategy = ALPHA_BETA;
                 else if(strcmp("graphs", strategyName) == 0)
                     strategy = GRAPHS;
-                else if(strcmp("deepbox1", strategyName) == 0)
-                    strategy = DEEPBOX1;
-                else if(strcmp("deepbox2", strategyName) == 0)
-                    strategy = DEEPBOX2;
+                else if(strcmp("deepbox", strategyName) == 0)
+                    strategy = DEEPBOX;
                 else
-                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta, graphs, deepbox1, deepbox2}.\n", strategyName);
+                    fprintf(stderr, "Unrecognised strategy name: %s. Available options are {random_move, first_box_completing_move, monte_carlo, alpha_beta, graphs, deepbox}.\n", strategyName);
+
                 break;
             case 'i':
                 turnTimeMillis = atoi(optarg);
@@ -271,7 +272,7 @@ int main(int argc, char ** argv) {
         else if (parseServerMsg(recv_buf, cmd_buf, data_buf)) {
             log_log("Server command: %s\nServer data: %s\n", cmd_buf, data_buf);
             if (strcmp(cmd_buf, "getName") == 0) {
-                log_log("Recognized message 'getName'. My name is %s %s %d\n", PLAYER_NAME, strategyName, turnTimeMillis);
+                log_log("Recognized message 'getName'. My name is %s\n", PLAYER_NAME);
                 sprintf(send_buf, "%s %s %d", PLAYER_NAME, strategyName, turnTimeMillis);
             }
             else if (strcmp(cmd_buf, "newGame") == 0) {
