@@ -202,6 +202,10 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
             potentialMoves[numGoodMoves + numBadMoves + i] = terribleMoves[i];
     }
 
+    unsigned long long endTime;
+    if (isRoot) // Limit the maximum turn time to 10 seconds
+        endTime = getTimeMillis() + 10000;
+
     Edge bestMove = NO_EDGE;
     for(short i=0; i < numPotentialMoves; i++) {
         Edge untriedMove = potentialMoves[i];
@@ -213,8 +217,9 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
 
 
         setEdgeTaken(state, untriedMove); // now it's a postMoveState
+        short newDepth = numPotentialMoves == 1 ? depth : depth - 1;
         
-        short v = doAlphaBeta(child, state, depth-1, nodesVisitedCount, branchesPrunedCount, false);
+        short v = doAlphaBeta(child, state, newDepth, nodesVisitedCount, branchesPrunedCount, false);
         setEdgeFree(state, untriedMove); // reset the state
 
         if(isRoot)
@@ -244,6 +249,15 @@ static short doAlphaBeta(ABNode * node, UnscoredState * state, short depth, int 
                 log_debug("Pruned branch with alpha cutoff!\n"); 
                 break; // alpha cutoff
             }
+        }
+
+        if (isRoot && getTimeMillis() > endTime) {
+            log_log("Search has taken over 10 seconds. Returning best move found so far.\n");
+            // Fail safe: Ensure we return a move
+            if (bestMove == NO_EDGE)
+                bestMove = potentialMoves[0];
+
+            break;
         }
     }
 

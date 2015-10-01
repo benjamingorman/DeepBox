@@ -96,7 +96,7 @@ Edge getDeepBoxMove(UnscoredState * state, int turnTimeMillis) {
     Edge moveChoice;
     if (numEdgesLeft <= 37) {
         log_log("Using alpha-beta strategy...\n");
-        moveChoice = getABMove(state, 6 + 8-(int)numEdgesLeft/5.0, false);
+        moveChoice = getABMove(state, 5 + 10-(int)numEdgesLeft/3.0, false);
     }
     else {
         log_log("Using always4never3 strategy...\n");
