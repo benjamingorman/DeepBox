@@ -10,15 +10,15 @@ Screenshots
 
 *Human client:*
 
-![Human client](http://imgur.com/A60cXau)
+![Human client](http://imgur.com/A60cXau.png)
 
 *Server gui:*
 
-![Server gui](http://imgur.com/GiaZQ84)
+![Server gui](http://imgur.com/GiaZQ84.png)
 
 *Interactive alpha-beta tree visualization:*
 
-![Alpha-beta](http://imgur.com/K7m0gfs)
+![Alpha-beta](http://imgur.com/K7m0gfs.png)
 
 Usage
 -------
