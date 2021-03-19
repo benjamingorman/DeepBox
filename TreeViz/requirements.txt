@@ -1,5 +1,5 @@
 Babel==2.0
-Jinja2==2.8
+Jinja2==2.11.3
 Landscape-Client==14.12
 MarkupSafe==0.23
 PAM==0.4.2
