@@ -4,7 +4,7 @@ Landscape-Client==14.12
 MarkupSafe==0.23
 PAM==0.4.2
 Pillow==2.3.0
-Pygments==2.0.2
+Pygments==2.7.4
 Pyste==0.9.10
 Sphinx==1.3.1
 StarCluster==0.95.6
