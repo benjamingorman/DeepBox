@@ -63,7 +63,7 @@ oauthlib==0.6.1
 oneconf==0.3.7.14.04.1
 optcomplete==1.2-devel
 pandas==0.16.2
-paramiko==1.15.2
+paramiko==2.10.1
 path.py==8.1.1
 pbr==1.8.0
 pexpect==3.3
