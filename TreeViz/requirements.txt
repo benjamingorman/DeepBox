@@ -35,7 +35,7 @@ functools32==3.2.3-2
 gnumpy==0.2
 gnureadline==6.3.3
 gyp==0.1
-html5lib==0.999
+html5lib==0.99999999
 httplib2==0.8
 iotop==0.6
 iptools==0.6.1
