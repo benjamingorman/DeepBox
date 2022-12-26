@@ -111,7 +111,7 @@ tornado==4.2.1
 traitlets==4.0.0
 urllib3==1.7.1
 virtualenv==13.1.0
-wheel==0.24.0
+wheel==0.38.1
 workerpool==0.9.4
 wsgiref==0.1.2
 zope.interface==4.0.5
